@@ -1,0 +1,85 @@
+{
+  "id": "kubernetes",
+  "title": "Kubernetes Deployment + Service + optional Ingress",
+  "description": "Generate a Kubernetes manifest with Deployment, Service, and optional TLS Ingress.",
+  "prompts": [
+    {
+      "id": "app_name",
+      "type": "string",
+      "label": "Application name",
+      "default": "myapp"
+    },
+    {
+      "id": "namespace",
+      "type": "string",
+      "label": "Kubernetes namespace",
+      "default": "default"
+    },
+    {
+      "id": "image",
+      "type": "string",
+      "label": "Container image",
+      "default": "nginx:1.25-alpine"
+    },
+    {
+      "id": "replicas",
+      "type": "int",
+      "label": "Number of replicas",
+      "default": 2
+    },
+    {
+      "id": "container_port",
+      "type": "int",
+      "label": "Container port",
+      "default": 80
+    },
+    {
+      "id": "service_type",
+      "type": "choice",
+      "label": "Service type",
+      "choices": ["ClusterIP", "NodePort", "LoadBalancer"],
+      "default": "ClusterIP"
+    },
+    {
+      "id": "ingress_enabled",
+      "type": "bool",
+      "label": "Enable Ingress?",
+      "default": false
+    },
+    {
+      "id": "ingress_host",
+      "type": "string",
+      "label": "Ingress host (if enabled)",
+      "default": "example.com"
+    },
+    {
+      "id": "tls_secret",
+      "type": "string",
+      "label": "TLS secret name (if Ingress TLS enabled)",
+      "default": "myapp-tls"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "k8s-manifest.yml",
+      "template": "k8s.j2"
+    }
+  ],
+  "validators": [
+    {
+      "cmd": "kubectl apply --dry-run=client -f k8s-manifest.yml",
+      "fail_on_nonzero": true
+    }
+  ],
+  "tests": [
+    {
+      "cmd": "kubectl get deployment {{ app_name }} -n {{ namespace }}",
+      "interactive": false
+    }
+  ],
+  "next_steps": [
+    "Run `kubectl apply -f k8s-manifest.yml` to deploy.",
+    "Use `kubectl get pods -n {{ namespace }}` to check pod status.",
+    "If Ingress is enabled, configure DNS to point {{ ingress_host }} to your cluster."
+  ]
+}

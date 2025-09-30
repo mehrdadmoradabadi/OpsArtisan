@@ -1,0 +1,6 @@
+---
+- name: {{ project_name }} playbook
+  hosts: {{ hosts }}
+  become: {{ 'yes' if become else 'no' }}
+  roles:
+    - {{ role_name }}

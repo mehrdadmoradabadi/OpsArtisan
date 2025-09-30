@@ -1,0 +1,16 @@
+server {
+    listen 80;
+    {% if tls_enabled %}listen 443 ssl;{% endif %}
+    server_name {{ server_name }};
+    root {{ root_dir }};
+    index index.html index.htm;
+
+    {% if tls_enabled %}
+    ssl_certificate {{ tls_cert }};
+    ssl_certificate_key {{ tls_key }};
+    {% endif %}
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}

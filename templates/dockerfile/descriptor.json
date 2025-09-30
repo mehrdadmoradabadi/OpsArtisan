@@ -1,0 +1,85 @@
+{
+  "id": "dockerfile",
+  "title": "Dockerfile Generator",
+  "description": "Production-ready Dockerfile with multi-stage builds, security best practices, and non-root user",
+  "prompts": [
+    {
+      "id": "runtime",
+      "type": "select",
+      "label": "Select runtime",
+      "choices": ["node", "python", "go", "rust", "java"],
+      "default": "node"
+    },
+    {
+      "id": "runtime_version",
+      "type": "text",
+      "label": "Runtime version (e.g., 20, 3.11, 1.21)",
+      "default": "20"
+    },
+    {
+      "id": "app_name",
+      "type": "text",
+      "label": "Application name",
+      "default": "myapp"
+    },
+    {
+      "id": "port",
+      "type": "number",
+      "label": "Application port",
+      "default": "3000"
+    },
+    {
+      "id": "multi_stage",
+      "type": "confirm",
+      "label": "Use multi-stage build?",
+      "default": true
+    },
+    {
+      "id": "non_root",
+      "type": "confirm",
+      "label": "Run as non-root user?",
+      "default": true
+    },
+    {
+      "id": "health_check",
+      "type": "confirm",
+      "label": "Add HEALTHCHECK instruction?",
+      "default": true
+    },
+    {
+      "id": "package_manager",
+      "type": "select",
+      "label": "Package manager (Node only)",
+      "choices": ["npm", "yarn", "pnpm"],
+      "default": "npm"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "Dockerfile",
+      "template": "Dockerfile.j2"
+    },
+    {
+      "path": ".dockerignore",
+      "template": "dockerignore.j2"
+    }
+  ],
+  "validators": [
+    {
+      "command": "docker build --dry-run -f Dockerfile . 2>/dev/null || hadolint Dockerfile",
+      "description": "Validate Dockerfile syntax"
+    }
+  ],
+  "tests": [
+    {
+      "command": "docker build -t test-image -f Dockerfile . && docker rmi test-image",
+      "description": "Test Docker build"
+    }
+  ],
+  "next_steps": [
+    "Review the generated Dockerfile and adjust dependencies",
+    "Build the image: docker build -t {{app_name}}:latest .",
+    "Run the container: docker run -p {{port}}:{{port}} {{app_name}}:latest",
+    "Consider adding a docker-compose.yml for local development"
+  ]
+}

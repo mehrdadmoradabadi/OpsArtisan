@@ -1,0 +1,9 @@
+<VirtualHost *:80>
+    ServerName {{ server_name }}
+    DocumentRoot {{ root_dir }}
+    {% if tls_enabled %}
+    SSLEngine on
+    SSLCertificateFile {{ tls_cert }}
+    SSLCertificateKeyFile {{ tls_key }}
+    {% endif %}
+</VirtualHost>

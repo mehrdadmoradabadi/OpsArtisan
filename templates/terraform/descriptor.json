@@ -1,0 +1,42 @@
+{
+  "id": "terraform",
+  "title": "Terraform Snippets",
+  "description": "Generate Terraform resource scaffolds for AWS (EC2, S3, VPC, Security Group).",
+  "prompts": [
+    {
+      "id": "resource_type",
+      "type": "choice",
+      "label": "Terraform resource",
+      "choices": ["ec2", "s3", "vpc", "sg"],
+      "default": "ec2"
+    },
+    {
+      "id": "resource_name",
+      "type": "string",
+      "label": "Resource name",
+      "default": "myresource"
+    },
+    {
+      "id": "region",
+      "type": "string",
+      "label": "AWS region",
+      "default": "us-east-1"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "{{ resource_name }}.tf",
+      "template": "{{ resource_type }}.j2"
+    }
+  ],
+  "validators": [
+    {
+      "cmd": "terraform validate",
+      "fail_on_nonzero": true
+    }
+  ],
+  "next_steps": [
+    "Run `terraform init && terraform plan`.",
+    "Apply with `terraform apply` when ready."
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "id": "ci-pipeline",
+  "title": "CI/CD Pipeline (GitHub / GitLab)",
+  "description": "Generate CI pipeline YAML for GitHub Actions or GitLab CI.",
+  "prompts": [
+    {
+      "id": "ci_type",
+      "type": "choice",
+      "label": "Choose CI platform",
+      "choices": ["github", "gitlab"],
+      "default": "github"
+    },
+    {
+      "id": "language",
+      "type": "choice",
+      "label": "Project language",
+      "choices": ["python", "node", "go"],
+      "default": "python"
+    },
+    {
+      "id": "include_deploy",
+      "type": "bool",
+      "label": "Include deploy stage?",
+      "default": false
+    }
+  ],
+  "outputs": [
+    {
+      "path": ".{{ ci_type }}/pipeline.yml",
+      "template": "{{ ci_type }}.j2"
+    }
+  ],
+  "next_steps": [
+    "Commit pipeline file to your repo.",
+    "Push to trigger build on {{ ci_type }}."
+  ]
+}

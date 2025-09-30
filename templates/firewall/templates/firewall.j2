@@ -1,0 +1,4 @@
+{% for port in allow_ports.split(',') %}
+ufw allow {{ port }}
+{% endfor %}
+ufw enable

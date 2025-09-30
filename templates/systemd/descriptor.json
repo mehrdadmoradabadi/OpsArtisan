@@ -1,0 +1,11 @@
+{
+  "id": "user-setup",
+  "title": "User Account & Sudo Setup",
+  "description": "Create a new user with sudo privileges.",
+  "prompts": [
+    {"id": "username", "type": "string", "label": "New username", "default": "deploy"}
+  ],
+  "outputs": [
+    {"path": "create-user.sh", "template": "create-user.j2"}
+  ]
+}

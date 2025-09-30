@@ -1,0 +1,23 @@
+{
+  "id": "firewall",
+  "title": "Firewall Rules",
+  "description": "Generate UFW, iptables, or nftables rules.",
+  "prompts": [
+    {"id": "fw_type", "type": "choice", "label": "Firewall type", "choices": ["ufw", "iptables", "nftables"], "default": "ufw"},
+    {"id": "allow_ports", "type": "string", "label": "Comma-separated allowed ports", "default": "22,80,443"}
+  ],
+  "outputs": [
+    {"path": "firewall.rules", "template": "firewall.j2"}
+  ],
+  "next_steps": [
+    "Review the allowed ports and adjust to match your security policy.",
+    "Apply rules:\n\nUFW:",
+    "sudo ufw allow 22",
+    "sudo ufw allow 80",
+    "sudo ufw enable\niptables:",
+    "sudo iptables-restore < firewall.rules\nnftables:",
+    "sudo nft -f firewall.rules",
+    "Test connectivity and ensure no essential ports are blocked.",
+    "Save rules for persistence across reboots."
+  ]
+}
