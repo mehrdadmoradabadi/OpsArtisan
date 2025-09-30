@@ -1,0 +1,21 @@
+{
+  "id": "docker-health",
+  "title": "Docker Healthcheck / Monitoring Probe",
+  "description": "Generate a Dockerfile HEALTHCHECK or external monitoring probe script.",
+  "prompts": [
+    {"id": "check_command", "type": "string", "label": "Health check command", "default": "curl -f http://localhost:8000/ || exit 1"},
+    {"id": "interval", "type": "string", "label": "Check interval (e.g. 30s)", "default": "30s"},
+    {"id": "retries", "type": "int", "label": "Retries before failure", "default": 3}
+  ],
+  "outputs": [
+    {"path": "Dockerfile.healthcheck", "template": "healthcheck.j2"}
+  ],
+  "next_steps": [
+    "Add the HEALTHCHECK to your Dockerfile if it’s not already present.",
+    "Rebuild the Docker image:",
+    "docker build -t myapp:latest ",
+    "Run the container and verify the health status:",
+    "docker run -d --name myapp myapp:latest\ndocker ps\ndocker inspect --format='{{.State.Health.Status}}' myapp\n",
+    "Integrate with monitoring/alerting tools (e.g., Prometheus, Nagios) if needed."
+  ]
+}

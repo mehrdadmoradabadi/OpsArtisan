@@ -1,0 +1,51 @@
+{
+  "id": "ansible",
+  "title": "Ansible Playbook Skeleton",
+  "description": "Generate an Ansible playbook with basic role layout.",
+  "prompts": [
+    {
+      "id": "project_name",
+      "type": "string",
+      "label": "Project / Playbook name",
+      "default": "myplaybook"
+    },
+    {
+      "id": "hosts",
+      "type": "string",
+      "label": "Target hosts group",
+      "default": "all"
+    },
+    {
+      "id": "become",
+      "type": "bool",
+      "label": "Use privilege escalation (become)?",
+      "default": true
+    },
+    {
+      "id": "role_name",
+      "type": "string",
+      "label": "Initial role name",
+      "default": "common"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "site.yml",
+      "template": "playbook.j2"
+    },
+    {
+      "path": "roles/{{ role_name }}/tasks/main.yml",
+      "template": "tasks.j2"
+    }
+  ],
+  "validators": [
+    {
+      "cmd": "ansible-playbook --syntax-check site.yml",
+      "fail_on_nonzero": true
+    }
+  ],
+  "next_steps": [
+    "Add hosts to your inventory file.",
+    "Run `ansible-playbook -i inventory site.yml`."
+  ]
+}

@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  {{ app_service_name }}:
+    image: {{ app_image }}
+    container_name: {{ project_name }}-{{ app_service_name }}
+    ports:
+      - "{{ app_port }}:{{ app_port }}"
+    restart: unless-stopped
+
+{% if db_type != "none" %}
+  {{ db_type }}:
+    image: {{ "postgres:15" if db_type == "postgres" else "mysql:8" }}
+    container_name: {{ project_name }}-{{ db_type }}
+    environment:
+      {% if db_type == "postgres" %}
+      POSTGRES_USER: {{ project_name }}
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: {{ project_name }}
+      {% elif db_type == "mysql" %}
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: {{ project_name }}
+      {% endif %}
+    volumes:
+      - db_data:/var/lib/{{ db_type }}
+    restart: unless-stopped
+{% endif %}
+
+{% if cache_type != "none" %}
+  {{ cache_type }}:
+    image: {{ "redis:7-alpine" if cache_type == "redis" else "memcached:1.6-alpine" }}
+    container_name: {{ project_name }}-{{ cache_type }}
+    restart: unless-stopped
+{% endif %}
+
+volumes:
+  db_data:

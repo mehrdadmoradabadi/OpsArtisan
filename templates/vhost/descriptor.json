@@ -1,0 +1,54 @@
+{
+  "id": "vhost",
+  "title": "Web Server vhost (Nginx / Apache)",
+  "description": "Generate Nginx or Apache vhost config with optional TLS.",
+  "prompts": [
+    {
+      "id": "server_type",
+      "type": "choice",
+      "label": "Web server type",
+      "choices": ["nginx", "apache"],
+      "default": "nginx"
+    },
+    {
+      "id": "server_name",
+      "type": "string",
+      "label": "Server name (domain)",
+      "default": "example.com"
+    },
+    {
+      "id": "root_dir",
+      "type": "string",
+      "label": "Document root",
+      "default": "/var/www/html"
+    },
+    {
+      "id": "tls_enabled",
+      "type": "bool",
+      "label": "Enable TLS?",
+      "default": true
+    },
+    {
+      "id": "tls_cert",
+      "type": "string",
+      "label": "TLS certificate path",
+      "default": "/etc/ssl/certs/example.crt"
+    },
+    {
+      "id": "tls_key",
+      "type": "string",
+      "label": "TLS key path",
+      "default": "/etc/ssl/private/example.key"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "{{ server_type }}-vhost.conf",
+      "template": "{{ server_type }}.j2"
+    }
+  ],
+  "next_steps": [
+    "Copy config file to your {{ server_type }} sites-available directory.",
+    "Enable site and reload {{ server_type }}."
+  ]
+}

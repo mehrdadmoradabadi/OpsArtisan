@@ -1,0 +1,23 @@
+{
+  "id": "cronjob",
+  "title": "Cron Job / systemd Timer",
+  "description": "Generate a cron job script or systemd timer unit.",
+  "prompts": [
+    {"id": "job_name", "type": "string", "label": "Job name", "default": "myjob"},
+    {"id": "schedule", "type": "string", "label": "Cron schedule(minute, hour, day, month, day)", "default": "0 2 * * *"},
+    {"id": "command", "type": "string", "label": "Command to run", "default": "/usr/local/bin/myscript.sh"}
+  ],
+  "outputs": [
+    {"path": "myjob.cron", "template": "cronjob.j2"}
+  ],
+  "next_steps": [
+    "Review the generated schedule and command to ensure correctness.",
+    "For cron:\n\nCopy the cron line to the user’s crontab:",
+    "crontab -e\n# paste generated cron line\nOptionally log output to a file:",
+    "0 2 * * * /usr/local/bin/myscript.sh >> /var/log/myjob.log 2>&1\n",
+    "For systemd timer:\n\nCopy .service and .timer files to /etc/systemd/system/.\n\nReload systemd:",
+    "systemctl daemon-reload",
+    "systemctl enable --now myjob.timer",
+    "systemctl status myjob.timer"
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "id": "openssl",
+  "title": "OpenSSL Certificate Generator",
+  "description": "Generate OpenSSL commands for CSR or self-signed cert.",
+  "prompts": [
+    {
+      "id": "common_name",
+      "type": "string",
+      "label": "Common Name (CN, e.g. domain.com)",
+      "default": "example.com"
+    },
+    {
+      "id": "country",
+      "type": "string",
+      "label": "Country (C)",
+      "default": "US"
+    },
+    {
+      "id": "org",
+      "type": "string",
+      "label": "Organization (O)",
+      "default": "MyOrg"
+    },
+    {
+      "id": "days",
+      "type": "int",
+      "label": "Days valid (for self-signed)",
+      "default": 365
+    },
+    {
+      "id": "mode",
+      "type": "choice",
+      "label": "Certificate type",
+      "choices": ["csr", "selfsigned"],
+      "default": "csr"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "cert-gen.sh",
+      "template": "cert-gen.j2"
+    }
+  ],
+  "validators": [
+    {
+      "cmd": "bash cert-gen.sh",
+      "fail_on_nonzero": false
+    }
+  ],
+  "next_steps": [
+    "Run `bash cert-gen.sh` to generate certificate files.",
+    "For production, consider Let's Encrypt or ACME automation."
+  ]
+}

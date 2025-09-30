@@ -1,0 +1,5 @@
+- job_name: '{{ job_name }}'
+  metrics_path: '{{ metrics_path }}'
+  scrape_interval: '{{ scrape_interval }}'
+  static_configs:
+    - targets: ['localhost:9100']

@@ -1,0 +1,23 @@
+{
+  "id": "prometheus",
+  "title": "Prometheus Scrape Job / Alert Rule",
+  "description": "Generate scrape configs or alerting rules.",
+  "prompts": [
+    {"id": "job_name", "type": "string", "label": "Job name", "default": "myjob"},
+    {"id": "metrics_path", "type": "string", "label": "Metrics path", "default": "/metrics"},
+    {"id": "scrape_interval", "type": "string", "label": "Scrape interval", "default": "30s"}
+  ],
+  "outputs": [
+    {"path": "{{ job_name }}-scrape.yml", "template": "scrape.j2"}
+  ],
+  "next_steps": [
+    "Copy the generated YAML to your Prometheus configuration directory (/etc/prometheus/ or wherever Prometheus reads configs).",
+    "Update prometheus.yml to include the new scrape job:",
+    "scrape_configs:\n  - job_name: 'myjob'\n    file_sd_configs:\n      - files:\n        - '/etc/prometheus/myjob-scrape.yml'\n",
+    "Validate configuration:",
+    "prometheus --config.file=/etc/prometheus/prometheus.yml --web.listen-address=:9090\n",
+    "Reload Prometheus or restart service to apply changes.",
+    "Verify metrics appear in Prometheus UI."
+  ]
+}
+

@@ -1,0 +1,11 @@
+provider "aws" {
+  region = "{{ region }}"
+}
+
+resource "aws_instance" "{{ resource_name }}" {
+  ami           = "ami-123456"
+  instance_type = "t2.micro"
+  tags = {
+    Name = "{{ resource_name }}"
+  }
+}

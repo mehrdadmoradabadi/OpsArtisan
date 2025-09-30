@@ -1,0 +1,67 @@
+{
+  "id": "docker-compose",
+  "title": "Docker Compose (multi-service stack)",
+  "description": "Generate a docker-compose.yml with app, database, and cache services.",
+  "prompts": [
+    {
+      "id": "project_name",
+      "type": "string",
+      "label": "Project name",
+      "default": "myapp"
+    },
+    {
+      "id": "app_service_name",
+      "type": "string",
+      "label": "Application service name",
+      "default": "app"
+    },
+    {
+      "id": "app_image",
+      "type": "string",
+      "label": "Application image",
+      "default": "python:3.10-slim"
+    },
+    {
+      "id": "app_port",
+      "type": "int",
+      "label": "Application exposed port",
+      "default": 8000
+    },
+    {
+      "id": "db_type",
+      "type": "choice",
+      "label": "Database type",
+      "choices": ["postgres", "mysql", "none"],
+      "default": "postgres"
+    },
+    {
+      "id": "cache_type",
+      "type": "choice",
+      "label": "Cache service",
+      "choices": ["redis", "memcached", "none"],
+      "default": "redis"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "docker-compose.yml",
+      "template": "docker-compose.j2"
+    }
+  ],
+  "validators": [
+    {
+      "cmd": "docker compose config -q",
+      "fail_on_nonzero": true
+    }
+  ],
+  "tests": [
+    {
+      "cmd": "docker compose up -d",
+      "interactive": false
+    }
+  ],
+  "next_steps": [
+    "Run `docker compose up -d` to start your stack.",
+    "Use `docker compose ps` to check running services."
+  ]
+}

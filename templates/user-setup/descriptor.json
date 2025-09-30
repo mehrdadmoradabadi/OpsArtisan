@@ -1,0 +1,21 @@
+{
+  "id": "user-setup",
+  "title": "User Account & Sudo Setup",
+  "description": "Create a new user with sudo privileges.",
+  "prompts": [
+    {"id": "username", "type": "string", "label": "New username", "default": "deploy"}
+  ],
+  "outputs": [
+    {"path": "create-user.sh", "template": "create-user.j2"}
+  ],
+  "next_steps": [
+    "Run the generated script as root:",
+    "sudo bash create-user.sh\n",
+    "Verify the user exists:",
+    "id deploy",
+    "Confirm sudo privileges:",
+    "sudo -l -U deploy\n",
+    "Optionally, set a secure password or configure SSH key access:",
+    "passwd deploy\nmkdir -p /home/deploy/.ssh\nnano /home/deploy/.ssh/authorized_keys\nchown -R deploy:deploy /home/deploy/.ssh\nchmod 700 /home/deploy/.ssh\nchmod 600 /home/deploy/.ssh/authorized_keys"
+  ]
+}

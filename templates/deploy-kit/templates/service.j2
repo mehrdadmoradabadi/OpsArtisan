@@ -1,0 +1,13 @@
+[Unit]
+Description={{ project_name }} deployment
+After=docker.service
+Requires=docker.service
+
+[Service]
+WorkingDirectory=/opt/{{ project_name }}
+ExecStart=/usr/bin/docker compose up --build --detach
+ExecStop=/usr/bin/docker compose down
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
