@@ -137,4 +137,8 @@ sudo dpkg -i "geberated .deb file"
 3. Test via:
 ```bash
 which opsartisan
+<<<<<<< HEAD
+=======
+opsartisan --version
+>>>>>>> detached
 ```
