@@ -28,7 +28,7 @@ USER_CONFIG_DIR = Path.home() / ".opsartisan"
 USER_TEMPLATES_DIR = USER_CONFIG_DIR / "templates"
 PRESETS_FILE = USER_CONFIG_DIR / "presets.json"
 LOCAL_TEMPLATES_DIR = Path("./templates")
-
+SYSTEM_TEMPLATES_DIR = Path("/usr/share/opsartisan/templates")
 
 class TemplateManager:
     """Manages template discovery, loading, and rendering."""
@@ -43,6 +43,8 @@ class TemplateManager:
             dirs.append(LOCAL_TEMPLATES_DIR)
         if USER_TEMPLATES_DIR.exists():
             dirs.append(USER_TEMPLATES_DIR)
+        if SYSTEM_TEMPLATES_DIR.exists():
+            dirs.append(SYSTEM_TEMPLATES_DIR)
         return dirs
 
     def list_templates(self) -> List[Dict[str, Any]]:
