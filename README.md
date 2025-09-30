@@ -114,4 +114,27 @@ Checks syntax and structure against the selected template.
 * Presets: `~/.opsartisan/presets.json`
 
 ------
-### Configuration Paths
+### Converting to debian package
+1. Make the folder structure:
+```bash
+opsartisan-deb/
+├── DEBIAN/
+│   └── control
+├── usr/
+│   └── local/
+│       └── bin/
+│           └── opsartisan   # your Python script
+├── usr/
+│   └── share/
+│       └── opsartisan/
+│           └── templates/   # optional preloaded templates 
+```
+2. Outside the folder use:
+```bahs
+dpkg-deb --build `folder name`
+sudo dpkg -i "geberated .deb file"
+```
+3. Test via:
+```bash
+which opsartisan
+```
