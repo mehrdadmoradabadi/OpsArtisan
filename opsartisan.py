@@ -6,12 +6,11 @@ Generates validated skeletons and config files through interactive wizards.
 
 import click
 import json
-import os
 import sys
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Environment, FileSystemLoader
 
 # Try to import questionary, fallback to input()
 try:
