@@ -1,0 +1,41 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ app_name }}-netpol
+  namespace: {{ namespace }}
+  labels:
+    app: {{ app_name }}
+    managed-by: opsartisan
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ app_name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ namespace }}
+        - podSelector:
+            matchLabels:
+              app: {{ app_name }}
+      ports:
+        - protocol: TCP
+          port: {{ port }}
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53

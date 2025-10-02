@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ app_name }}-pdb
+  namespace: {{ namespace }}
+  labels:
+    app: {{ app_name }}
+    managed-by: opsartisan
+spec:
+  minAvailable: {{ (((replicas | int) * 0.5) | int) if (replicas | int) > 1 else 1 }}
+  selector:
+    matchLabels:
+      app: {{ app_name }}

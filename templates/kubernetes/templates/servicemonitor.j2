@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ app_name }}-metrics
+  namespace: {{ namespace }}
+  labels:
+    app: {{ app_name }}
+    managed-by: opsartisan
+spec:
+  selector:
+    matchLabels:
+      app: {{ app_name }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s

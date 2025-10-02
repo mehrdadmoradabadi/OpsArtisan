@@ -1,85 +1,360 @@
 {
   "id": "kubernetes",
-  "title": "Kubernetes Deployment + Service + optional Ingress",
-  "description": "Generate a Kubernetes manifest with Deployment, Service, and optional TLS Ingress.",
+  "title": "Kubernetes Application Deployment",
+  "description": "Complete production-ready K8s deployment with service, configmap, ingress, HPA, monitoring, and security policies",
+  "category": "Infrastructure",
+  "tags": ["kubernetes", "deployment", "production", "k8s", "containers"],
+  "version": "2.0.0",
+
+  "dependencies": [
+    "dockerfile"
+  ],
+
+  "required_tools": [
+    "kubectl",
+    "docker"
+  ],
+
+  "optional_tools": [
+    "kubeval",
+    "kustomize",
+    "helm"
+  ],
+
+  "environment_defaults": {
+    "dev": {
+      "replicas": 1,
+      "resources_limits_cpu": "100m",
+      "resources_limits_memory": "128Mi",
+      "ingress_enabled": false,
+      "monitoring_enabled": false,
+      "autoscaling_enabled": false,
+      "network_policy_enabled": false,
+      "pdb_enabled": false
+    },
+    "staging": {
+      "replicas": 2,
+      "resources_limits_cpu": "500m",
+      "resources_limits_memory": "512Mi",
+      "ingress_enabled": true,
+      "monitoring_enabled": true,
+      "autoscaling_enabled": false,
+      "network_policy_enabled": true,
+      "pdb_enabled": true
+    },
+    "prod": {
+      "replicas": 3,
+      "resources_limits_cpu": "1000m",
+      "resources_limits_memory": "1Gi",
+      "ingress_enabled": true,
+      "monitoring_enabled": true,
+      "autoscaling_enabled": true,
+      "network_policy_enabled": true,
+      "pdb_enabled": true
+    }
+  },
+
   "prompts": [
     {
       "id": "app_name",
       "type": "string",
       "label": "Application name",
-      "default": "myapp"
+      "default": "my-app",
+      "validation": "^[a-z0-9-]+$",
+      "description": "Lowercase alphanumeric with hyphens only"
     },
     {
       "id": "namespace",
       "type": "string",
       "label": "Kubernetes namespace",
-      "default": "default"
+      "default": "default",
+      "validation": "^[a-z0-9-]+$"
     },
     {
-      "id": "image",
+      "id": "image_name",
       "type": "string",
-      "label": "Container image",
-      "default": "nginx:1.25-alpine"
+      "label": "Docker image name",
+      "default": "myregistry/my-app:latest",
+      "description": "Full image path with tag"
     },
     {
       "id": "replicas",
-      "type": "int",
+      "type": "integer",
       "label": "Number of replicas",
-      "default": 2
+      "default": 2,
+      "min": 1,
+      "max": 10
     },
     {
-      "id": "container_port",
-      "type": "int",
+      "id": "port",
+      "type": "integer",
       "label": "Container port",
-      "default": 80
+      "default": 8080,
+      "min": 1,
+      "max": 65535
     },
     {
-      "id": "service_type",
-      "type": "choice",
-      "label": "Service type",
-      "choices": ["ClusterIP", "NodePort", "LoadBalancer"],
-      "default": "ClusterIP"
+      "id": "resources_limits_cpu",
+      "type": "string",
+      "label": "CPU limit (e.g., 500m, 1, 2)",
+      "default": "500m"
+    },
+    {
+      "id": "resources_limits_memory",
+      "type": "string",
+      "label": "Memory limit (e.g., 256Mi, 1Gi)",
+      "default": "512Mi"
     },
     {
       "id": "ingress_enabled",
       "type": "bool",
-      "label": "Enable Ingress?",
+      "label": "Enable ingress?",
+      "default": true
+    },
+    {
+      "id": "domain",
+      "type": "string",
+      "label": "Domain name (if ingress enabled)",
+      "default": "example.com",
+      "condition": "ingress_enabled == true"
+    },
+    {
+      "id": "monitoring_enabled",
+      "type": "bool",
+      "label": "Enable Prometheus monitoring?",
+      "default": true
+    },
+    {
+      "id": "autoscaling_enabled",
+      "type": "bool",
+      "label": "Enable horizontal pod autoscaling?",
       "default": false
     },
     {
-      "id": "ingress_host",
-      "type": "string",
-      "label": "Ingress host (if enabled)",
-      "default": "example.com"
+      "id": "network_policy_enabled",
+      "type": "bool",
+      "label": "Enable network policies?",
+      "default": true
     },
     {
-      "id": "tls_secret",
-      "type": "string",
-      "label": "TLS secret name (if Ingress TLS enabled)",
-      "default": "myapp-tls"
+      "id": "pdb_enabled",
+      "type": "bool",
+      "label": "Enable pod disruption budget?",
+      "default": true
     }
   ],
+
   "outputs": [
     {
-      "path": "k8s-manifest.yml",
-      "template": "k8s.j2"
+      "path": "k8s/namespace.yaml",
+      "template": "namespace.j2"
+    },
+    {
+      "path": "k8s/deployment.yaml",
+      "template": "deployment.j2"
+    },
+    {
+      "path": "k8s/service.yaml",
+      "template": "service.j2"
+    },
+    {
+      "path": "k8s/configmap.yaml",
+      "template": "configmap.j2"
+    },
+    {
+      "path": "k8s/secret.yaml",
+      "template": "secret.j2"
+    },
+    {
+      "path": "k8s/service_account.yaml",
+      "template": "service_account.j2"
+    },
+    {
+      "path": "k8s/ingress.yaml",
+      "template": "ingress.j2",
+      "condition": "ingress_enabled"
+    },
+    {
+      "path": "k8s/hpa.yaml",
+      "template": "hpa.j2",
+      "condition": "autoscaling_enabled"
+    },
+    {
+      "path": "k8s/servicemonitor.yaml",
+      "template": "servicemonitor.j2",
+      "condition": "monitoring_enabled"
+    },
+    {
+      "path": "k8s/network_policy.yaml",
+      "template": "network_policy.j2",
+      "condition": "network_policy_enabled"
+    },
+    {
+      "path": "k8s/pdb.yaml",
+      "template": "pdb.j2",
+      "condition": "pdb_enabled"
+    },
+    {
+      "path": "k8s/kustomization.yaml",
+      "template": "kustomization.j2"
+    },
+    {
+      "path": "k8s/README.md",
+      "template": "readme.j2"
+    },
+    {
+      "path": ".gitignore",
+      "template": "gitignore.j2"
     }
   ],
+
   "validators": [
     {
-      "cmd": "kubectl apply --dry-run=client -f k8s-manifest.yml",
-      "fail_on_nonzero": true
+      "command": "kubectl apply --dry-run=client -f k8s/",
+      "description": "Validate Kubernetes manifests",
+      "timeout": 30
+    },
+    {
+      "command": "kubeval k8s/*.yaml",
+      "description": "Schema validation with kubeval",
+      "timeout": 20,
+      "optional": true
+    },
+    {
+      "command": "kubectl get nodes",
+      "description": "Verify cluster connectivity",
+      "timeout": 10,
+      "optional": true
     }
   ],
+
   "tests": [
     {
-      "cmd": "kubectl get deployment {{ app_name }} -n {{ namespace }}",
-      "interactive": false
+      "command": "kubectl apply -f k8s/ --namespace=test-{{ app_name }} --dry-run=server",
+      "description": "Server-side dry-run validation",
+      "cleanup": null
+    },
+    {
+      "command": "kustomize build k8s/",
+      "description": "Test kustomization build",
+      "cleanup": null,
+      "optional": true
     }
   ],
+
+  "hooks": {
+    "pre_generation": [
+      {
+        "type": "check",
+        "command": "kubectl version --client",
+        "description": "Verify kubectl installation",
+        "on_failure": "fail"
+      },
+      {
+        "type": "check",
+        "command": "kubectl cluster-info",
+        "description": "Verify cluster access",
+        "on_failure": "warn",
+        "optional": true
+      }
+    ],
+    "post_generation": [
+      {
+        "type": "shell",
+        "command": "kubectl create namespace {{ namespace }} --dry-run=client -o yaml > k8s/namespace.yaml",
+        "description": "Generate namespace manifest",
+        "on_failure": "warn"
+      },
+      {
+        "type": "shell",
+        "command": "echo 'k8s/secret.yaml' >> .gitignore",
+        "description": "Add secrets to gitignore",
+        "on_failure": "ignore"
+      },
+      {
+        "type": "info",
+        "message": "Review k8s/secret.yaml and update with actual secrets before deploying",
+        "on_failure": "ignore"
+      }
+    ]
+  },
+
   "next_steps": [
-    "Run `kubectl apply -f k8s-manifest.yml` to deploy.",
-    "Use `kubectl get pods -n {{ namespace }}` to check pod status.",
-    "If Ingress is enabled, configure DNS to point {{ ingress_host }} to your cluster."
-  ]
+    "Review generated manifests in k8s/ directory",
+    "Update k8s/secret.yaml with actual secrets (DO NOT commit to git)",
+    "Validate manifests: kubectl apply --dry-run=client -f k8s/",
+    "Apply to cluster: kubectl apply -k k8s/",
+    "Check deployment: kubectl get pods -n {{ namespace }}",
+    "View logs: kubectl logs -f deployment/{{ app_name }} -n {{ namespace }}",
+    "Access service: kubectl port-forward svc/{{ app_name }} {{ port }}:{{ port }} -n {{ namespace }}"
+  ],
+
+  "example_usage": "opsartisan new k8s-app --preset prod",
+
+  "documentation": {
+    "readme": "k8s/README.md",
+    "examples": [
+      {
+        "title": "Development deployment",
+        "command": "opsartisan new k8s-app --preset dev --app-name myapp",
+        "description": "Single replica, minimal resources, no ingress"
+      },
+      {
+        "title": "Staging deployment",
+        "command": "opsartisan new k8s-app --preset staging --domain staging.example.com",
+        "description": "Two replicas with monitoring and ingress"
+      },
+      {
+        "title": "Production deployment",
+        "command": "opsartisan new k8s-app --preset prod --domain app.example.com --replicas 5",
+        "description": "High availability with autoscaling, monitoring, and all features"
+      },
+      {
+        "title": "Custom configuration",
+        "command": "opsartisan new k8s-app --app-name api --port 3000 --replicas 3 --no-autoscaling",
+        "description": "Custom app with specific settings"
+      }
+    ],
+    "links": [
+      {
+        "title": "Kubernetes Documentation",
+        "url": "https://kubernetes.io/docs/"
+      },
+      {
+        "title": "kubectl Cheat Sheet",
+        "url": "https://kubernetes.io/docs/reference/kubectl/cheatsheet/"
+      },
+      {
+        "title": "Kustomize Documentation",
+        "url": "https://kustomize.io/"
+      }
+    ],
+    "best_practices": [
+      "Always use resource limits and requests",
+      "Enable pod disruption budgets for HA",
+      "Use network policies to restrict traffic",
+      "Implement health checks (liveness/readiness)",
+      "Never commit secrets to version control",
+      "Use namespaces to isolate environments",
+      "Enable monitoring and logging",
+      "Test with dry-run before applying"
+    ]
+  },
+
+  "troubleshooting": {
+    "common_issues": [
+      {
+        "issue": "Pod not starting",
+        "solution": "kubectl describe pod -l app={{ app_name }} -n {{ namespace }}"
+      },
+      {
+        "issue": "Image pull errors",
+        "solution": "Verify image name and registry credentials"
+      },
+      {
+        "issue": "Service not reachable",
+        "solution": "kubectl get endpoints {{ app_name }} -n {{ namespace }}"
+      }
+    ]
+  }
 }

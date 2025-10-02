@@ -1,0 +1,30 @@
+# Ignore Kubernetes config files that may contain secrets
+*.kubeconfig
+*.kubeconfig.*
+
+# Ignore Helm release values overrides if not intended for version control
+values-override.yaml
+values-override-*.yaml
+
+# Ignore local manifests generated dynamically
+manifests/
+generated/
+tmp/
+
+# Ignore kustomize build output
+kustomization.build.yaml
+
+# Ignore sensitive files if templated via Jinja
+{% if ignore_secrets %}
+secrets.yaml
+secrets-*.yaml
+{% endif %}
+
+# Ignore namespace-specific overlays (optional)
+{% if namespace %}
+overlays/{{ namespace }}/
+{% endif %}
+
+# Ignore any local development overrides
+dev-values.yaml
+dev/

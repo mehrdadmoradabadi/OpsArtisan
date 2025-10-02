@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: {{ namespace }}
+
+commonLabels:
+  app: {{ app_name }}
+  managed-by: opsartisan
+
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - configmap.yaml
+  - service_account.yaml
+{% if ingress_enabled %}
+  - ingress.yaml
+{% endif %}
+{% if autoscaling_enabled %}
+  - hpa.yaml
+{% endif %}
+{% if monitoring_enabled %}
+  - servicemonitor.yaml
+{% endif %}
+  - pdb.yaml
+  - network_policy.yaml

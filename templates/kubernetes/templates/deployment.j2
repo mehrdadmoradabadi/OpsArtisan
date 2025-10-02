@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ app_name }}
+  namespace: {{ namespace }}
+  labels:
+    app: {{ app_name }}
+    version: "1.0.0"
+    managed-by: opsartisan
+spec:
+  replicas: {{ replicas }}
+  selector:
+    matchLabels:
+      app: {{ app_name }}
+  template:
+    metadata:
+      labels:
+        app: {{ app_name }}
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "{{ 'true' if monitoring_enabled else 'false' }}"
+        prometheus.io/port: "{{ port }}"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: {{ app_name }}
+          image: {{ image_name }}
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: {{ port }}
+              protocol: TCP
+          env:
+            - name: APP_NAME
+              value: "{{ app_name }}"
+            - name: APP_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ app_name }}-config
+                  key: environment
+          envFrom:
+            - configMapRef:
+                name: {{ app_name }}-config
+          resources:
+            limits:
+              cpu: {{ resources_limits_cpu }}
+              memory: {{ resources_limits_memory }}
+            requests:
+              cpu: {{ resources_limits_cpu | replace('m', '') | int // 2 }}m
+              memory: {{ resources_limits_memory | replace('Mi', '') | int // 2 }}Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ app_name }}-config
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
