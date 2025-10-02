@@ -1,23 +1,335 @@
 {
   "id": "cronjob",
   "title": "Cron Job / systemd Timer",
-  "description": "Generate a cron job script or systemd timer unit.",
+  "description": "Generate cron jobs, systemd timers, or Kubernetes CronJobs with monitoring and logging",
+  "category": "Automation",
+  "tags": ["cron", "systemd", "scheduling", "automation", "kubernetes"],
+  "version": "2.0.0",
+
+  "dependencies": [],
+
+  "required_tools": [],
+
+  "optional_tools": [
+    "systemctl",
+    "kubectl"
+  ],
+
+  "environment_defaults": {
+    "dev": {
+      "schedule_type": "cron",
+      "logging_enabled": true,
+      "monitoring_enabled": false,
+      "error_notification": false,
+      "retry_on_failure": false
+    },
+    "staging": {
+      "schedule_type": "systemd",
+      "logging_enabled": true,
+      "monitoring_enabled": true,
+      "error_notification": true,
+      "retry_on_failure": true
+    },
+    "prod": {
+      "schedule_type": "systemd",
+      "logging_enabled": true,
+      "monitoring_enabled": true,
+      "error_notification": true,
+      "retry_on_failure": true,
+      "backup_logs": true
+    }
+  },
+
   "prompts": [
-    {"id": "job_name", "type": "string", "label": "Job name", "default": "myjob"},
-    {"id": "schedule", "type": "string", "label": "Cron schedule(minute, hour, day, month, day)", "default": "0 2 * * *"},
-    {"id": "command", "type": "string", "label": "Command to run", "default": "/usr/local/bin/myscript.sh"}
+    {
+      "id": "job_name",
+      "type": "string",
+      "label": "Job name",
+      "default": "myjob",
+      "validation": "^[a-z0-9_-]+$",
+      "description": "Lowercase alphanumeric with underscores/hyphens"
+    },
+    {
+      "id": "schedule_type",
+      "type": "choice",
+      "label": "Schedule type",
+      "choices": ["cron", "systemd", "kubernetes"],
+      "default": "cron",
+      "description": "Choose scheduling mechanism"
+    },
+    {
+      "id": "schedule",
+      "type": "string",
+      "label": "Schedule (cron format: minute hour day month weekday)",
+      "default": "0 2 * * *",
+      "description": "Examples: '0 2 * * *' (2am daily), '*/15 * * * *' (every 15min)",
+      "condition": "schedule_type in ['cron', 'kubernetes']"
+    },
+    {
+      "id": "systemd_schedule",
+      "type": "string",
+      "label": "systemd OnCalendar schedule",
+      "default": "daily",
+      "description": "Examples: 'daily', 'weekly', 'Mon *-*-* 00:00:00', '*:0/15' (every 15min)",
+      "condition": "schedule_type == 'systemd'"
+    },
+    {
+      "id": "command",
+      "type": "string",
+      "label": "Command to run",
+      "default": "/usr/local/bin/myscript.sh"
+    },
+    {
+      "id": "working_directory",
+      "type": "string",
+      "label": "Working directory",
+      "default": "/opt/jobs",
+      "condition": "schedule_type in ['systemd', 'kubernetes']"
+    },
+    {
+      "id": "user",
+      "type": "string",
+      "label": "Run as user",
+      "default": "root",
+      "condition": "schedule_type == 'systemd'"
+    },
+    {
+      "id": "logging_enabled",
+      "type": "bool",
+      "label": "Enable logging?",
+      "default": true
+    },
+    {
+      "id": "log_path",
+      "type": "string",
+      "label": "Log file path",
+      "default": "/var/log/{{ job_name }}.log",
+      "condition": "logging_enabled && schedule_type != 'kubernetes'"
+    },
+    {
+      "id": "error_notification",
+      "type": "bool",
+      "label": "Send notifications on errors?",
+      "default": false
+    },
+    {
+      "id": "notification_email",
+      "type": "string",
+      "label": "Notification email",
+      "default": "admin@example.com",
+      "condition": "error_notification && schedule_type == 'cron'"
+    },
+    {
+      "id": "timeout",
+      "type": "integer",
+      "label": "Job timeout (seconds)",
+      "default": 3600,
+      "min": 60,
+      "max": 86400,
+      "condition": "schedule_type in ['systemd', 'kubernetes']"
+    },
+    {
+      "id": "retry_on_failure",
+      "type": "bool",
+      "label": "Retry on failure?",
+      "default": false,
+      "condition": "schedule_type in ['systemd', 'kubernetes']"
+    },
+    {
+      "id": "max_retries",
+      "type": "integer",
+      "label": "Maximum retry attempts",
+      "default": 3,
+      "min": 1,
+      "max": 10,
+      "condition": "retry_on_failure"
+    },
+    {
+      "id": "k8s_namespace",
+      "type": "string",
+      "label": "Kubernetes namespace",
+      "default": "default",
+      "condition": "schedule_type == 'kubernetes'"
+    },
+    {
+      "id": "k8s_image",
+      "type": "string",
+      "label": "Container image",
+      "default": "busybox:latest",
+      "condition": "schedule_type == 'kubernetes'"
+    }
   ],
+
   "outputs": [
-    {"path": "myjob.cron", "template": "cronjob.j2"}
+    {
+      "path": "{{ job_name }}.cron",
+      "template": "cronjob.j2",
+      "condition": "schedule_type == 'cron'"
+    },
+    {
+      "path": "{{ job_name }}.service",
+      "template": "systemd_service.j2",
+      "condition": "schedule_type == 'systemd'"
+    },
+    {
+      "path": "{{ job_name }}.timer",
+      "template": "systemd_timer.j2",
+      "condition": "schedule_type == 'systemd'"
+    },
+    {
+      "path": "k8s/cronjob.yaml",
+      "template": "k8s_cronjob.j2",
+      "condition": "schedule_type == 'kubernetes'"
+    },
+    {
+      "path": "scripts/{{ job_name }}.sh",
+      "template": "job_script.j2"
+    },
+    {
+      "path": "scripts/{{ job_name }}_wrapper.sh",
+      "template": "wrapper_script.j2",
+      "condition": "schedule_type in ['cron', 'systemd']"
+    },
+    {
+      "path": "README.md",
+      "template": "readme.j2"
+    }
   ],
+
+  "validators": [
+    {
+      "command": "bash -n scripts/{{ job_name }}.sh",
+      "description": "Validate bash script syntax",
+      "timeout": 10
+    },
+    {
+      "command": "systemd-analyze verify {{ job_name }}.service {{ job_name }}.timer",
+      "description": "Validate systemd units",
+      "timeout": 10,
+      "condition": "schedule_type == 'systemd'",
+      "optional": true
+    },
+    {
+      "command": "kubectl apply --dry-run=client -f k8s/cronjob.yaml",
+      "description": "Validate Kubernetes CronJob",
+      "timeout": 10,
+      "condition": "schedule_type == 'kubernetes'",
+      "optional": true
+    }
+  ],
+
+  "tests": [
+    {
+      "command": "bash scripts/{{ job_name }}.sh",
+      "description": "Test script execution",
+      "cleanup": null
+    }
+  ],
+
+  "hooks": {
+    "post_generation": [
+      {
+        "type": "shell",
+        "command": "chmod +x scripts/{{ job_name }}.sh scripts/{{ job_name }}_wrapper.sh",
+        "description": "Make scripts executable",
+        "on_failure": "warn",
+        "condition": "schedule_type in ['cron', 'systemd']"
+      },
+      {
+        "type": "shell",
+        "command": "mkdir -p $(dirname {{ log_path }})",
+        "description": "Create log directory",
+        "on_failure": "ignore",
+        "condition": "logging_enabled && schedule_type != 'kubernetes'"
+      },
+      {
+        "type": "info",
+        "message": "Review the generated files and test the job manually before scheduling",
+        "on_failure": "ignore"
+      }
+    ]
+  },
+
   "next_steps": [
-    "Review the generated schedule and command to ensure correctness.",
-    "For cron:\n\nCopy the cron line to the user’s crontab:",
-    "crontab -e\n# paste generated cron line\nOptionally log output to a file:",
-    "0 2 * * * /usr/local/bin/myscript.sh >> /var/log/myjob.log 2>&1\n",
-    "For systemd timer:\n\nCopy .service and .timer files to /etc/systemd/system/.\n\nReload systemd:",
-    "systemctl daemon-reload",
-    "systemctl enable --now myjob.timer",
-    "systemctl status myjob.timer"
-  ]
+    "Review generated files in the output directory",
+    "Test the script manually: bash scripts/{{ job_name }}.sh",
+    "",
+    "=== For CRON ===",
+    "1. Edit user crontab: crontab -e",
+    "2. Add the line from {{ job_name }}.cron",
+    "3. Verify: crontab -l",
+    "4. Check logs: tail -f {{ log_path }}",
+    "",
+    "=== For SYSTEMD ===",
+    "1. Copy files to systemd:",
+    "   sudo cp {{ job_name }}.service {{ job_name }}.timer /etc/systemd/system/",
+    "2. Reload systemd: sudo systemctl daemon-reload",
+    "3. Enable timer: sudo systemctl enable --now {{ job_name }}.timer",
+    "4. Check status: sudo systemctl status {{ job_name }}.timer",
+    "5. View logs: sudo journalctl -u {{ job_name }}.service -f",
+    "6. List timers: systemctl list-timers",
+    "",
+    "=== For KUBERNETES ===",
+    "1. Apply CronJob: kubectl apply -f k8s/cronjob.yaml",
+    "2. Check status: kubectl get cronjobs -n {{ k8s_namespace }}",
+    "3. View jobs: kubectl get jobs -n {{ k8s_namespace }}",
+    "4. View logs: kubectl logs -l job-name={{ job_name }} -n {{ k8s_namespace }}"
+  ],
+
+  "example_usage": "opsartisan new cronjob --preset prod --schedule-type systemd",
+
+  "documentation": {
+    "readme": "README.md",
+    "examples": [
+      {
+        "title": "Simple daily backup",
+        "command": "opsartisan new cronjob --job-name backup --schedule '0 2 * * *' --command '/opt/backup.sh'",
+        "description": "Daily backup at 2am using cron"
+      },
+      {
+        "title": "systemd timer with monitoring",
+        "command": "opsartisan new cronjob --preset prod --schedule-type systemd --systemd-schedule daily",
+        "description": "Daily systemd timer with logging and error handling"
+      },
+      {
+        "title": "Kubernetes CronJob",
+        "command": "opsartisan new cronjob --schedule-type kubernetes --schedule '*/15 * * * *' --k8s-image myapp:latest",
+        "description": "Run containerized job every 15 minutes"
+      },
+      {
+        "title": "Every 15 minutes with retries",
+        "command": "opsartisan new cronjob --schedule '*/15 * * * *' --retry-on-failure --max-retries 3",
+        "description": "High-frequency job with automatic retries"
+      }
+    ],
+    "links": [
+      {
+        "title": "Crontab Guru",
+        "url": "https://crontab.guru/"
+      },
+      {
+        "title": "systemd.timer Documentation",
+        "url": "https://www.freedesktop.org/software/systemd/man/systemd.timer.html"
+      },
+      {
+        "title": "Kubernetes CronJob",
+        "url": "https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/"
+      }
+    ],
+    "cron_examples": [
+      "0 2 * * *       - Daily at 2am",
+      "*/15 * * * *    - Every 15 minutes",
+      "0 */4 * * *     - Every 4 hours",
+      "0 0 * * 0       - Weekly on Sunday at midnight",
+      "0 0 1 * *       - Monthly on the 1st at midnight",
+      "30 2 * * 1-5    - Weekdays at 2:30am"
+    ],
+    "systemd_examples": [
+      "daily            - Every day at 00:00",
+      "weekly           - Every Monday at 00:00",
+      "*:0/15           - Every 15 minutes",
+      "Mon *-*-* 02:00  - Mondays at 2am",
+      "*-*-* 04:00:00   - Daily at 4am"
+    ]
+  }
 }

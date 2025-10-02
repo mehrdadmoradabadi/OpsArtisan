@@ -37,3 +37,22 @@ class PresetManager:
         """Get a specific preset."""
         presets = PresetManager.load_presets()
         return presets.get(name)
+
+    @staticmethod
+    def delete_preset(name: str) -> bool:
+        """Delete a preset."""
+        presets = PresetManager.load_presets()
+        if name not in presets:
+            return False
+
+        del presets[name]
+
+        with open(PRESETS_FILE, 'w') as f:
+            json.dump(presets, f, indent=2)
+
+        return True
+
+    @staticmethod
+    def list_presets() -> Dict[str, Any]:
+        """List all presets with their metadata."""
+        return PresetManager.load_presets()
