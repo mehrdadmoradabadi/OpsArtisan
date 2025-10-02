@@ -1,0 +1,11 @@
+---
+all:
+  children:
+    {{ hosts }}:
+      hosts:
+        # Add your target hosts here
+        # server1.example.com:
+        #   ansible_user: ubuntu
+      vars:
+        # Group variables
+        # ansible_python_interpreter: /usr/bin/python3

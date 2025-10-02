@@ -1,0 +1,8 @@
+---
+# Handlers for role {{ role_name }}
+
+- name: restart example service
+  service:
+    name: example
+    state: restarted
+  listen: "restart example service"

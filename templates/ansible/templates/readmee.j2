@@ -1,0 +1,79 @@
+# {{ project_name }}
+
+Ansible playbook for {{ hosts }} management.
+
+## Structure
+
+```
+.
+├── site.yml                    # Main playbook
+├── ansible.cfg                 # Ansible configuration
+├── inventory/                  # Inventory files
+│   └── hosts.*
+├── roles/                      # Roles directory
+│   └── {{ role_name }}/
+│       ├── tasks/
+│       ├── handlers/
+│       ├── vars/
+│       ├── defaults/
+│       ├── templates/
+│       ├── files/
+│       └── meta/
+├── group_vars/                 # Group variables
+│   └── all.yml
+{% if vault_enabled %}├── vault/                      # Encrypted secrets
+│   └── secrets.yml
+{% endif %}└── README.md
+```
+
+## Usage
+
+1. **Add hosts to inventory:**
+   ```bash
+   vim inventory/hosts.*
+   ```
+
+2. **Test syntax:**
+   ```bash
+   ansible-playbook --syntax-check site.yml
+   ```
+
+3. **Dry run:**
+   ```bash
+   ansible-playbook site.yml --check -i inventory/
+   ```
+
+4. **Execute playbook:**
+   ```bash
+   ansible-playbook site.yml -i inventory/
+   ```
+
+{% if vault_enabled %}5. **Working with vault:**
+   ```bash
+   # Encrypt secrets
+   ansible-vault encrypt vault/secrets.yml
+
+   # Edit encrypted file
+   ansible-vault edit vault/secrets.yml
+
+   # Run playbook with vault
+   ansible-playbook site.yml --ask-vault-pass
+   ```
+{% endif %}
+
+## Customization
+
+- Modify role tasks in `roles/{{ role_name }}/tasks/main.yml`
+- Add variables in `roles/{{ role_name }}/defaults/main.yml`
+- Configure hosts in `inventory/`
+- Add global variables in `group_vars/all.yml`
+
+## Requirements
+
+- Ansible >= 2.9
+- Python 3.x on target hosts
+- SSH access to target hosts
+
+## License
+
+MIT

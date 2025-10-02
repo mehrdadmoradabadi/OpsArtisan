@@ -1,0 +1,27 @@
+---
+# Tasks for role {{ role_name }}
+
+- name: Example task - Print message
+  debug:
+    msg: "Hello from {{ role_name }} role on {{ '{{' }} inventory_hostname {{ '}}' }}"
+  tags:
+    - example
+
+- name: Ensure required packages are installed
+  package:
+    name:
+      - curl
+      - vim
+    state: present
+  when: ansible_os_family in ['Debian', 'RedHat']
+  tags:
+    - packages
+{% if create_handlers %}
+
+- name: Example task that notifies handler
+  copy:
+    content: "# Managed by Ansible\n"
+    dest: /tmp/example.conf
+    mode: '0644'
+  notify: restart example service
+{% endif %}

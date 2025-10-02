@@ -1,13 +1,49 @@
 {
   "id": "ansible",
-  "title": "Ansible Playbook Skeleton",
-  "description": "Generate an Ansible playbook with basic role layout.",
+  "title": "Ansible Playbook & Role Generator",
+  "description": "Complete Ansible project structure with playbooks, roles, inventory, and configuration",
+  "category": "Configuration Management",
+  "tags": ["ansible", "automation", "configuration", "deployment"],
+  "version": "2.0.0",
+
+  "dependencies": [],
+
+  "required_tools": [
+    "ansible",
+    "ansible-lint"
+  ],
+
+  "environment_defaults": {
+    "dev": {
+      "become": false,
+      "gather_facts": true,
+      "check_mode": true,
+      "vault_enabled": false
+    },
+    "staging": {
+      "become": true,
+      "gather_facts": true,
+      "check_mode": false,
+      "vault_enabled": true,
+      "handlers_enabled": true
+    },
+    "prod": {
+      "become": true,
+      "gather_facts": true,
+      "check_mode": false,
+      "vault_enabled": true,
+      "handlers_enabled": true,
+      "diff_mode": false
+    }
+  },
+
   "prompts": [
     {
       "id": "project_name",
       "type": "string",
       "label": "Project / Playbook name",
-      "default": "myplaybook"
+      "default": "myplaybook",
+      "validation": "^[a-z0-9_-]+$"
     },
     {
       "id": "hosts",
@@ -22,30 +58,213 @@
       "default": true
     },
     {
+      "id": "gather_facts",
+      "type": "bool",
+      "label": "Gather facts from hosts?",
+      "default": true
+    },
+    {
       "id": "role_name",
       "type": "string",
       "label": "Initial role name",
-      "default": "common"
+      "default": "common",
+      "validation": "^[a-z0-9_]+$"
+    },
+    {
+      "id": "create_handlers",
+      "type": "bool",
+      "label": "Create handlers directory?",
+      "default": true
+    },
+    {
+      "id": "create_vars",
+      "type": "bool",
+      "label": "Create variables files?",
+      "default": true
+    },
+    {
+      "id": "create_templates",
+      "type": "bool",
+      "label": "Create templates directory?",
+      "default": true
+    },
+    {
+      "id": "vault_enabled",
+      "type": "bool",
+      "label": "Enable Ansible Vault for secrets?",
+      "default": false
+    },
+    {
+      "id": "inventory_type",
+      "type": "choice",
+      "label": "Inventory format",
+      "choices": ["ini", "yaml"],
+      "default": "ini"
     }
   ],
+
   "outputs": [
     {
       "path": "site.yml",
       "template": "playbook.j2"
     },
     {
+      "path": "ansible.cfg",
+      "template": "ansible_cfg.j2"
+    },
+    {
+      "path": "inventory/hosts.ini",
+      "template": "inventory_ini.j2",
+      "condition": "inventory_type == 'ini'"
+    },
+    {
+      "path": "inventory/hosts.yml",
+      "template": "inventory_yaml.j2",
+      "condition": "inventory_type == 'yaml'"
+    },
+    {
       "path": "roles/{{ role_name }}/tasks/main.yml",
-      "template": "tasks.j2"
+      "template": "role_tasks.j2"
+    },
+    {
+      "path": "roles/{{ role_name }}/handlers/main.yml",
+      "template": "role_handlers.j2",
+      "condition": "create_handlers"
+    },
+    {
+      "path": "roles/{{ role_name }}/vars/main.yml",
+      "template": "role_vars.j2",
+      "condition": "create_vars"
+    },
+    {
+      "path": "roles/{{ role_name }}/defaults/main.yml",
+      "template": "role_defaults.j2"
+    },
+    {
+      "path": "roles/{{ role_name }}/templates/.gitkeep",
+      "template": "empty.j2",
+      "condition": "create_templates"
+    },
+    {
+      "path": "roles/{{ role_name }}/files/.gitkeep",
+      "template": "empty.j2"
+    },
+    {
+      "path": "roles/{{ role_name }}/meta/main.yml",
+      "template": "role_meta.j2"
+    },
+    {
+      "path": "group_vars/all.yml",
+      "template": "group_vars.j2"
+    },
+    {
+      "path": "vault/secrets.yml",
+      "template": "vault_secrets.j2",
+      "condition": "vault_enabled"
+    },
+    {
+      "path": ".ansible-lint",
+      "template": "ansible_lint.j2"
+    },
+    {
+      "path": "README.md",
+      "template": "readme.j2"
     }
   ],
+
   "validators": [
     {
-      "cmd": "ansible-playbook --syntax-check site.yml",
-      "fail_on_nonzero": true
+      "command": "ansible-playbook --syntax-check site.yml",
+      "description": "Validate playbook syntax",
+      "timeout": 30
+    },
+    {
+      "command": "ansible-lint site.yml",
+      "description": "Lint playbook for best practices",
+      "timeout": 30,
+      "optional": true
+    },
+    {
+      "command": "ansible-inventory -i inventory/ --list",
+      "description": "Validate inventory structure",
+      "timeout": 10
     }
   ],
+
+  "tests": [
+    {
+      "command": "ansible-playbook site.yml --check -i inventory/",
+      "description": "Dry-run playbook execution",
+      "cleanup": null
+    }
+  ],
+
+  "hooks": {
+    "post_generation": [
+      {
+        "type": "shell",
+        "command": "chmod 600 vault/secrets.yml",
+        "description": "Secure vault file permissions",
+        "condition": "vault_enabled",
+        "on_failure": "warn"
+      },
+      {
+        "type": "shell",
+        "command": "ansible-galaxy init roles/{{ role_name }} --force",
+        "description": "Initialize role with galaxy structure",
+        "on_failure": "ignore",
+        "optional": true
+      }
+    ],
+    "pre_generation": [
+      {
+        "type": "check",
+        "command": "ansible --version",
+        "description": "Check Ansible installation",
+        "on_failure": "fail"
+      }
+    ]
+  },
+
   "next_steps": [
-    "Add hosts to your inventory file.",
-    "Run `ansible-playbook -i inventory site.yml`."
-  ]
+    "Review generated playbook structure",
+    "Add your target hosts to inventory/hosts.*",
+    "Customize role tasks in roles/{{ role_name }}/tasks/main.yml",
+    "Test syntax: ansible-playbook --syntax-check site.yml",
+    "Run in check mode: ansible-playbook site.yml --check -i inventory/",
+    "Execute playbook: ansible-playbook site.yml -i inventory/"
+  ],
+
+  "example_usage": "opsartisan new ansible-project --preset prod",
+
+  "documentation": {
+    "readme": "README.md",
+    "examples": [
+      {
+        "title": "Development playbook",
+        "command": "opsartisan new ansible-project --preset dev --role-name webserver",
+        "description": "Basic playbook with single role, no vault"
+      },
+      {
+        "title": "Production playbook",
+        "command": "opsartisan new ansible-project --preset prod --vault-enabled --inventory-type yaml",
+        "description": "Full featured with vault encryption and YAML inventory"
+      },
+      {
+        "title": "Quick role skeleton",
+        "command": "opsartisan new ansible-project --no-vault --no-handlers",
+        "description": "Minimal role structure for quick prototyping"
+      }
+    ],
+    "links": [
+      {
+        "title": "Ansible Documentation",
+        "url": "https://docs.ansible.com/"
+      },
+      {
+        "title": "Ansible Best Practices",
+        "url": "https://docs.ansible.com/ansible/latest/tips_tricks/ansible_tips_tricks.html"
+      }
+    ]
+  }
 }

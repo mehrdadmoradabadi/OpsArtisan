@@ -1,0 +1,19 @@
+[defaults]
+inventory = ./inventory/
+roles_path = ./roles
+host_key_checking = False
+retry_files_enabled = False
+gathering = {{ 'smart' if gather_facts else 'explicit' }}
+{% if vault_enabled %}
+vault_password_file = ./.vault_pass
+{% endif %}
+
+[privilege_escalation]
+become = {{ 'True' if become else 'False' }}
+become_method = sudo
+become_user = root
+become_ask_pass = False
+
+[ssh_connection]
+pipelining = True
+ssh_args = -o ControlMaster=auto -o ControlPersist=60s

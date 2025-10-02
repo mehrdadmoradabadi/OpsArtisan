@@ -1,6 +1,10 @@
+# ========== playbook.j2 ==========
 ---
 - name: {{ project_name }} playbook
   hosts: {{ hosts }}
   become: {{ 'yes' if become else 'no' }}
+  gather_facts: {{ 'yes' if gather_facts else 'no' }}
+  
   roles:
     - {{ role_name }}
+

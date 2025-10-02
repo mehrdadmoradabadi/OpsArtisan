@@ -1,0 +1,13 @@
+---
+# Global variables for all hosts
+
+ansible_python_interpreter: /usr/bin/python3
+ansible_connection: ssh
+
+# Common configuration
+common_timezone: "UTC"
+common_packages:
+  - curl
+  - vim
+  - git
+  - htop
