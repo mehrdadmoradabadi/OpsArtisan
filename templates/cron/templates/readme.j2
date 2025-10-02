@@ -1,0 +1,568 @@
+# {{ job_name }} - Scheduled Job
+
+{% if schedule_type == 'cron' %}
+Cron job scheduled to run: `{{ schedule }}`
+{% elif schedule_type == 'systemd' %}
+systemd timer scheduled to run: `{{ systemd_schedule }}`
+{% elif schedule_type == 'kubernetes' %}
+Kubernetes CronJob scheduled to run: `{{ schedule }}`
+{% endif %}
+
+## Overview
+
+- **Job Name:** {{ job_name }}
+- **Command:** `{{ command }}`
+{% if working_directory %}
+- **Working Directory:** {{ working_directory }}
+{% endif %}
+{% if logging_enabled and schedule_type != 'kubernetes' %}
+- **Log File:** {{ log_path }}
+{% endif %}
+{% if timeout %}
+- **Timeout:** {{ timeout }} seconds
+{% endif %}
+{% if retry_on_failure %}
+- **Max Retries:** {{ max_retries }}
+{% endif %}
+
+## Files Generated
+
+{% if schedule_type == 'cron' %}
+- `{{ job_name }}.cron` - Cron entry
+- `scripts/{{ job_name }}.sh` - Main job script
+- `scripts/{{ job_name }}_wrapper.sh` - Wrapper with locking and error handling
+{% elif schedule_type == 'systemd' %}
+- `{{ job_name }}.service` - systemd service unit
+- `{{ job_name }}.timer` - systemd timer unit
+- `scripts/{{ job_name }}.sh` - Main job script
+- `scripts/{{ job_name }}_wrapper.sh` - Wrapper script
+{% elif schedule_type == 'kubernetes' %}
+- `k8s/cronjob.yaml` - Kubernetes CronJob manifest
+- `scripts/{{ job_name }}.sh` - Job script (for reference)
+{% endif %}
+
+## Installation
+
+{% if schedule_type == 'cron' %}
+### Cron Installation
+
+1. **Test the script manually:**
+   ```bash
+   bash scripts/{{ job_name }}.sh
+   ```
+
+2. **Install to crontab:**
+   ```bash
+   crontab -e
+   ```
+
+3. **Add the line from {{ job_name }}.cron**
+
+4. **Verify installation:**
+   ```bash
+   crontab -l | grep {{ job_name }}
+   ```
+
+5. **Monitor logs:**
+   ```bash
+{% if logging_enabled %}
+   tail -f {{ log_path }}
+{% else %}
+   # Check system mail or add logging
+{% endif %}
+   ```
+
+### Using the Wrapper Script (Recommended)
+
+For better error handling and locking:
+
+```bash
+# Update your cron entry to use the wrapper
+{{ schedule }} {{ command | replace(job_name + '.sh', job_name + '_wrapper.sh') }}
+```
+
+{% elif schedule_type == 'systemd' %}
+### systemd Installation
+
+1. **Test the script manually:**
+   ```bash
+   bash scripts/{{ job_name }}.sh
+   ```
+
+2. **Copy files to systemd:**
+   ```bash
+   sudo cp {{ job_name }}.service {{ job_name }}.timer /etc/systemd/system/
+   ```
+
+3. **Reload systemd:**
+   ```bash
+   sudo systemctl daemon-reload
+   ```
+
+4. **Enable and start the timer:**
+   ```bash
+   sudo systemctl enable --now {{ job_name }}.timer
+   ```
+
+5. **Check timer status:**
+   ```bash
+   sudo systemctl status {{ job_name }}.timer
+   ```
+
+6. **List all timers:**
+   ```bash
+   systemctl list-timers
+   ```
+
+7. **View logs:**
+   ```bash
+   # Real-time logs
+   sudo journalctl -u {{ job_name }}.service -f
+
+   # Last 50 lines
+   sudo journalctl -u {{ job_name }}.service -n 50
+{% if logging_enabled %}
+
+   # Or check log file
+   tail -f {{ log_path }}
+{% endif %}
+   ```
+
+### Management Commands
+
+```bash
+# Start job manually
+sudo systemctl start {{ job_name }}.service
+
+# Stop the timer
+sudo systemctl stop {{ job_name }}.timer
+
+# Disable the timer
+sudo systemctl disable {{ job_name }}.timer
+
+# Check next run time
+systemctl list-timers | grep {{ job_name }}
+```
+
+{% elif schedule_type == 'kubernetes' %}
+### Kubernetes Installation
+
+1. **Create namespace (if needed):**
+   ```bash
+   kubectl create namespace {{ k8s_namespace }}
+   ```
+
+2. **Apply the CronJob:**
+   ```bash
+   kubectl apply -f k8s/cronjob.yaml
+   ```
+
+3. **Verify CronJob:**
+   ```bash
+   kubectl get cronjobs -n {{ k8s_namespace }}
+   ```
+
+4. **View jobs created by CronJob:**
+   ```bash
+   kubectl get jobs -n {{ k8s_namespace }}
+   ```
+
+5. **View pods:**
+   ```bash
+   kubectl get pods -n {{ k8s_namespace }} -l job-name={{ job_name }}
+   ```
+
+6. **View logs:**
+   ```bash
+   # Latest job logs
+   kubectl logs -l job-name={{ job_name }} -n {{ k8s_namespace }} --tail=100
+
+   # Follow logs
+   kubectl logs -l job-name={{ job_name }} -n {{ k8s_namespace }} -f
+   ```
+
+### Management Commands
+
+```bash
+# Trigger job manually
+kubectl create job {{ job_name }}-manual --from=cronjob/{{ job_name }} -n {{ k8s_namespace }}
+
+# Suspend CronJob
+kubectl patch cronjob {{ job_name }} -n {{ k8s_namespace }} -p '{"spec":{"suspend":true}}'
+
+# Resume CronJob
+kubectl patch cronjob {{ job_name }} -n {{ k8s_namespace }} -p '{"spec":{"suspend":false}}'
+
+# Delete CronJob
+kubectl delete cronjob {{ job_name }} -n {{ k8s_namespace }}
+
+# View CronJob history
+kubectl get jobs -n {{ k8s_namespace }} -l app={{ job_name }}
+```
+{% endif %}
+
+## Testing
+
+Run the job manually to test:
+
+```bash
+bash scripts/{{ job_name }}.sh
+```
+
+{% if schedule_type in ['cron', 'systemd'] %}
+Test with wrapper for full functionality:
+
+```bash
+bash scripts/{{ job_name }}_wrapper.sh
+```
+{% endif %}
+
+## Troubleshooting
+
+{% if schedule_type == 'cron' %}
+### Cron Not Running
+
+1. Check cron service:
+   ```bash
+   systemctl status cron  # or crond on some systems
+   ```
+
+2. Check logs:
+   ```bash
+   grep CRON /var/log/syslog
+{% if logging_enabled %}
+   tail -f {{ log_path }}
+{% endif %}
+   ```
+
+3. Verify crontab:
+   ```bash
+   crontab -l
+   ```
+
+4. Check script permissions:
+   ```bash
+   ls -la scripts/{{ job_name }}.sh
+   ```
+
+{% elif schedule_type == 'systemd' %}
+### Timer Not Running
+
+1. Check timer is active:
+   ```bash
+   systemctl is-active {{ job_name }}.timer
+   ```
+
+2. Check timer status:
+   ```bash
+   systemctl status {{ job_name }}.timer
+   ```
+
+3. View detailed logs:
+   ```bash
+   journalctl -xe -u {{ job_name }}.service
+   ```
+
+4. Verify schedule:
+   ```bash
+   systemctl list-timers {{ job_name }}.timer
+   ```
+
+{% elif schedule_type == 'kubernetes' %}
+### CronJob Not Running
+
+1. Check CronJob status:
+   ```bash
+   kubectl describe cronjob {{ job_name }} -n {{ k8s_namespace }}
+   ```
+
+2. Check for recent jobs:
+   ```bash
+   kubectl get jobs -n {{ k8s_namespace }} -l app={{ job_name }}
+   ```
+
+3. Check pod logs:
+   ```bash
+   kubectl logs -l app={{ job_name }} -n {{ k8s_namespace }} --tail=100
+   ```
+
+4. Check for errors:
+   ```bash
+   kubectl get events -n {{ k8s_namespace }} --sort-by='.lastTimestamp'
+   ```
+
+5. Verify image:
+   ```bash
+   kubectl describe cronjob {{ job_name }} -n {{ k8s_namespace }} | grep Image
+   ```
+{% endif %}
+
+## Schedule Format
+
+{% if schedule_type in ['cron', 'kubernetes'] %}
+### Cron Format
+
+```
+* * * * *
+│ │ │ │ │
+│ │ │ │ └─── Day of week (0-7, Sun-Sat)
+│ │ │ └───── Month (1-12)
+│ │ └─────── Day of month (1-31)
+│ └───────── Hour (0-23)
+└─────────── Minute (0-59)
+```
+
+**Examples:**
+- `0 2 * * *` - Daily at 2am
+- `*/15 * * * *` - Every 15 minutes
+- `0 */4 * * *` - Every 4 hours
+- `0 0 * * 0` - Weekly on Sunday at midnight
+- `0 0 1 * *` - Monthly on the 1st at midnight
+- `30 2 * * 1-5` - Weekdays at 2:30am
+
+{% elif schedule_type == 'systemd' %}
+### systemd OnCalendar Format
+
+**Examples:**
+- `daily` - Every day at 00:00
+- `weekly` - Every Monday at 00:00
+- `monthly` - First day of each month at 00:00
+- `*:0/15` - Every 15 minutes
+- `Mon *-*-* 02:00:00` - Mondays at 2am
+- `*-*-* 04:00:00` - Daily at 4am
+- `Mon..Fri *-*-* 09:00:00` - Weekdays at 9am
+
+See: `man systemd.time` for more formats
+{% endif %}
+
+## Monitoring
+
+{% if logging_enabled and schedule_type != 'kubernetes' %}
+### Log Monitoring
+
+Monitor logs in real-time:
+
+```bash
+tail -f {{ log_path }}
+```
+
+Check for errors:
+
+```bash
+grep ERROR {{ log_path }}
+```
+
+View last 50 lines:
+
+```bash
+tail -50 {{ log_path }}
+```
+
+{% if schedule_type == 'systemd' %}
+Or use journalctl:
+
+```bash
+journalctl -u {{ job_name }}.service -n 50
+```
+{% endif %}
+{% endif %}
+
+{% if error_notification %}
+### Error Notifications
+
+{% if schedule_type == 'cron' %}
+Errors will be emailed to: {{ notification_email }}
+
+Make sure `mail` command is configured:
+
+```bash
+# Test mail setup
+echo "Test message" | mail -s "Test" {{ notification_email }}
+```
+{% elif schedule_type == 'systemd' %}
+Configure systemd to send notifications on failure:
+
+1. Create `/etc/systemd/system/{{ job_name }}.service.d/override.conf`:
+   ```ini
+   [Unit]
+   OnFailure=status-email@%n.service
+   ```
+
+2. Reload systemd:
+   ```bash
+   sudo systemctl daemon-reload
+   ```
+{% endif %}
+{% endif %}
+
+{% if retry_on_failure %}
+### Retry Behavior
+
+This job is configured to retry up to {{ max_retries }} times on failure.
+
+{% if schedule_type == 'systemd' %}
+View retry status:
+
+```bash
+systemctl status {{ job_name }}.service
+```
+
+Check restart count:
+
+```bash
+systemctl show {{ job_name }}.service | grep NRestarts
+```
+{% elif schedule_type == 'kubernetes' %}
+View job retry status:
+
+```bash
+kubectl get jobs -n {{ k8s_namespace }} -l app={{ job_name }}
+kubectl describe job <job-name> -n {{ k8s_namespace }}
+```
+{% endif %}
+{% endif %}
+
+## Best Practices
+
+1. **Always test manually** before scheduling
+2. **Monitor logs regularly** for errors
+3. **Set appropriate timeouts** to prevent hung jobs
+4. **Use locking mechanisms** to prevent concurrent runs
+5. **Log everything** - stdout, stderr, and timestamps
+6. **Handle errors gracefully** with proper exit codes
+7. **Set up alerts** for job failures
+8. **Document dependencies** and requirements
+9. **Use absolute paths** in scripts
+10. **Test failure scenarios** to ensure retries work
+
+## Security Considerations
+
+{% if schedule_type == 'systemd' and user != 'root' %}
+- Running as user: `{{ user }}`
+- Limited filesystem access via systemd sandboxing
+{% elif schedule_type == 'kubernetes' %}
+- Running as non-root user (UID 1000)
+- No privilege escalation allowed
+{% else %}
+- Consider running as non-root user when possible
+{% endif %}
+- Store sensitive data in environment variables or secrets
+- Restrict log file permissions
+- Validate all inputs in your script
+
+## Maintenance
+
+### Updating the Job
+
+{% if schedule_type == 'cron' %}
+1. Edit the script: `vim scripts/{{ job_name }}.sh`
+2. Test changes: `bash scripts/{{ job_name }}.sh`
+3. Cron will automatically use the updated script
+
+{% elif schedule_type == 'systemd' %}
+1. Edit the script: `vim scripts/{{ job_name }}.sh`
+2. Test changes: `bash scripts/{{ job_name }}.sh`
+3. Reload if you modified .service or .timer:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl restart {{ job_name }}.timer
+   ```
+
+{% elif schedule_type == 'kubernetes' %}
+1. Update the CronJob manifest: `vim k8s/cronjob.yaml`
+2. Apply changes:
+   ```bash
+   kubectl apply -f k8s/cronjob.yaml
+   ```
+3. Verify update:
+   ```bash
+   kubectl describe cronjob {{ job_name }} -n {{ k8s_namespace }}
+   ```
+{% endif %}
+
+### Changing the Schedule
+
+{% if schedule_type == 'cron' %}
+```bash
+crontab -e
+# Update the schedule line
+```
+
+{% elif schedule_type == 'systemd' %}
+1. Edit `{{ job_name }}.timer`
+2. Update the `OnCalendar=` line
+3. Reload:
+   ```bash
+   sudo cp {{ job_name }}.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl restart {{ job_name }}.timer
+   ```
+
+{% elif schedule_type == 'kubernetes' %}
+```bash
+kubectl edit cronjob {{ job_name }} -n {{ k8s_namespace }}
+# Update the schedule field
+```
+
+Or update the YAML and reapply:
+```bash
+vim k8s/cronjob.yaml
+kubectl apply -f k8s/cronjob.yaml
+```
+{% endif %}
+
+## Backup and Recovery
+
+{% if logging_enabled and schedule_type != 'kubernetes' %}
+### Log Rotation
+
+Set up logrotate to prevent log file growth:
+
+```bash
+sudo vim /etc/logrotate.d/{{ job_name }}
+```
+
+Add:
+```
+{{ log_path }} {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 {{ user if schedule_type == 'systemd' else 'root' }} {{ user if schedule_type == 'systemd' else 'root' }}
+}
+```
+{% endif %}
+
+### Backup Job Configuration
+
+{% if schedule_type == 'cron' %}
+```bash
+crontab -l > {{ job_name }}.crontab.backup
+cp scripts/{{ job_name }}.sh {{ job_name }}.sh.backup
+```
+
+{% elif schedule_type == 'systemd' %}
+```bash
+sudo cp /etc/systemd/system/{{ job_name }}.{service,timer} ~/backup/
+cp scripts/{{ job_name }}.sh ~/backup/
+```
+
+{% elif schedule_type == 'kubernetes' %}
+```bash
+kubectl get cronjob {{ job_name }} -n {{ k8s_namespace }} -o yaml > {{ job_name }}.backup.yaml
+```
+{% endif %}
+
+## Related Resources
+
+- [Crontab Guru](https://crontab.guru/) - Cron expression editor
+- [systemd.time man page](https://www.freedesktop.org/software/systemd/man/systemd.time.html)
+- [Kubernetes CronJob Documentation](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/)
+
+---
+
+**Generated by OpsArtisan**
+Last updated: {{ now }}

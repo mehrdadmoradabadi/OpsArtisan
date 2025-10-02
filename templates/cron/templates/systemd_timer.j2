@@ -1,0 +1,11 @@
+[Unit]
+Description=Timer for {{ job_name }}
+Requires={{ job_name }}.service
+
+[Timer]
+OnCalendar={{ systemd_schedule }}
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

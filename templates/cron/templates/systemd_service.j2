@@ -1,0 +1,43 @@
+[Unit]
+Description={{ job_name }} scheduled job
+Documentation=man:cron(8)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ user }}
+Group={{ user }}
+WorkingDirectory={{ working_directory }}
+{% if logging_enabled %}
+StandardOutput=append:{{ log_path }}
+StandardError=append:{{ log_path }}
+{% else %}
+StandardOutput=journal
+StandardError=journal
+{% endif %}
+ExecStart={{ command }}
+{% if timeout %}
+TimeoutStartSec={{ timeout }}
+{% endif %}
+{% if retry_on_failure %}
+Restart=on-failure
+RestartSec=300
+StartLimitBurst={{ max_retries }}
+StartLimitIntervalSec=3600
+{% endif %}
+
+# Security settings
+PrivateTmp=yes
+NoNewPrivileges=yes
+{% if user != 'root' %}
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths={{ working_directory }}
+{% if logging_enabled %}
+ReadWritePaths={{ log_path | dirname }}
+{% endif %}
+{% endif %}
+
+[Install]
+WantedBy=multi-user.target

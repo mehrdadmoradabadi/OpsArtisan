@@ -177,7 +177,7 @@
       "condition": "schedule_type == 'systemd'"
     },
     {
-      "path": "k8s/cronjob.yaml",
+      "path": "cronjob.yaml",
       "template": "k8s_cronjob.j2",
       "condition": "schedule_type == 'kubernetes'"
     },
