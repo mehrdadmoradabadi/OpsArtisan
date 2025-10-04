@@ -1,0 +1,247 @@
+# {{ app_name }} - Docker Setup
+
+Docker configuration for {{ app_name }} application.
+
+## Quick Start
+
+### Using Make
+
+```bash
+# Build the image
+make build
+
+# Run the container
+make run
+
+# View logs
+make logs
+
+# Stop the container
+make stop
+```
+
+### Using Docker directly
+
+```bash
+# Build
+docker build -t {{ app_name }}:latest .
+
+# Run
+docker run -d -p {{ port }}:{{ port }} --env-file .env {{ app_name }}:latest
+
+# Logs
+docker logs -f {{ app_name }}
+```
+
+### Using Docker Compose
+
+```bash
+# Start
+docker-compose up -d
+
+# Stop
+docker-compose down
+
+# Logs
+docker-compose logs -f
+```
+
+## Configuration
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and update values:
+
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+### Build Arguments
+
+{% if build_args %}
+Available build arguments:
+
+- `BUILD_DATE`: Build timestamp
+- `VCS_REF`: Git commit reference
+- `VERSION`: Application version
+
+Example:
+
+```bash
+docker build \
+  --build-arg BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+  --build-arg VCS_REF=$(git rev-parse --short HEAD) \
+  --build-arg VERSION=1.0.0 \
+  -t {{ app_name }}:latest .
+```
+{% endif %}
+
+## Image Details
+
+- **Base Image:** {% if runtime == "node" %}node:{{ runtime_version }}-alpine{% elif runtime == "python" %}python:{{ runtime_version }}-slim{% elif runtime == "go" %}{% if distroless %}gcr.io/distroless/static{% else %}alpine:latest{% endif %}{% elif runtime == "java" %}{% if distroless %}gcr.io/distroless/java{{ runtime_version }}{% else %}eclipse-temurin:{{ runtime_version }}-jre{% endif %}{% elif runtime == "rust" %}{% if distroless %}gcr.io/distroless/cc{% else %}debian:bookworm-slim{% endif %}{% elif runtime == "php" %}php:{{ runtime_version }}-fpm-alpine{% elif runtime == "ruby" %}ruby:{{ runtime_version }}-alpine{% elif runtime == ".net" %}mcr.microsoft.com/dotnet/aspnet:{{ runtime_version }}{% endif %}
+
+- **Runtime:** {{ runtime }} {{ runtime_version }}
+{% if multi_stage %}
+- **Multi-stage:** Yes (optimized for size)
+{% endif %}
+{% if non_root %}
+- **User:** Non-root (UID 1001)
+{% endif %}
+{% if health_check %}
+- **Health Check:** Enabled ({{ health_endpoint }})
+{% endif %}
+- **Port:** {{ port }}
+
+## Building for Production
+
+### Optimize Image Size
+
+{% if optimization_level == "aggressive" %}
+This Dockerfile uses aggressive optimization:
+{% elif optimization_level == "standard" %}
+This Dockerfile uses standard optimization:
+{% else %}
+To further optimize:
+{% endif %}
+
+```bash
+# Build with BuildKit
+DOCKER_BUILDKIT=1 docker build -t {{ app_name }}:latest .
+
+# Analyze layers
+dive {{ app_name }}:latest
+```
+
+### Security Scanning
+
+```bash
+# Scan for vulnerabilities
+docker scan {{ app_name }}:latest
+
+# Using Trivy
+trivy image {{ app_name }}:latest
+```
+
+## Development
+
+### Build Development Image
+
+```bash
+docker build --target builder -t {{ app_name }}:dev .
+```
+
+### Run with Live Reload
+
+```bash
+docker run -it --rm \
+  -p {{ port }}:{{ port }} \
+  -v $(pwd):/app \
+  {{ app_name }}:dev
+```
+
+## Deployment
+
+### Push to Registry
+
+```bash
+# Tag image
+docker tag {{ app_name }}:latest registry.example.com/{{ app_name }}:latest
+
+# Push
+docker push registry.example.com/{{ app_name }}:latest
+```
+
+### Using with Kubernetes
+
+See `k8s/` directory for Kubernetes manifests.
+
+```bash
+# Update image in deployment
+kubectl set image deployment/{{ app_name }} {{ app_name }}={{ app_name }}:latest
+```
+
+## Troubleshooting
+
+### Container Won't Start
+
+```bash
+# Check logs
+docker logs {{ app_name }}
+
+# Run interactively
+docker run -it --rm {{ app_name }}:latest /bin/sh
+```
+
+### Health Check Failing
+
+```bash
+# Test health endpoint
+curl http://localhost:{{ port }}{{ health_endpoint }}
+
+# Check inside container
+docker exec -it {{ app_name }} wget -O- http://localhost:{{ port }}{{ health_endpoint }}
+```
+
+### Image Too Large
+
+```bash
+# Analyze layers
+dive {{ app_name }}:latest
+
+# Check .dockerignore
+cat .dockerignore
+```
+
+## Best Practices Applied
+
+{% if multi_stage %}
+✅ Multi-stage build for smaller images
+{% endif %}
+{% if non_root %}
+✅ Non-root user for security
+{% endif %}
+{% if health_check %}
+✅ Health checks for orchestration
+{% endif %}
+{% if cache_optimization %}
+✅ BuildKit cache mounts for faster builds
+{% endif %}
+✅ Minimal base images
+✅ Layer caching optimization
+✅ .dockerignore to exclude unnecessary files
+{% if include_ca_certificates %}
+✅ CA certificates included
+{% endif %}
+
+## Makefile Commands
+
+| Command | Description |
+|---------|-------------|
+| `make help` | Show all available commands |
+| `make build` | Build Docker image |
+| `make run` | Run container |
+| `make stop` | Stop container |
+| `make logs` | View logs |
+| `make shell` | Open shell in container |
+| `make clean` | Remove container and image |
+| `make lint` | Lint Dockerfile |
+| `make scan` | Scan for vulnerabilities |
+| `make dive` | Analyze image layers |
+
+## Additional Resources
+
+- [Docker Best Practices](https://docs.docker.com/develop/dev-best-practices/)
+- [Multi-stage Builds](https://docs.docker.com/build/building/multi-stage/)
+- [Security Best Practices](https://docs.docker.com/engine/security/)
+{% if runtime == "node" %}
+- [Node.js Docker Guide](https://nodejs.org/en/docs/guides/nodejs-docker-webapp/)
+{% elif runtime == "python" %}
+- [Python Docker Guide](https://docs.python.org/3/using/docker.html)
+{% elif runtime == "go" %}
+- [Go Docker Guide](https://docs.docker.com/language/golang/)
+{% endif %}
+
+---
+
+**Generated by OpsArtisan**

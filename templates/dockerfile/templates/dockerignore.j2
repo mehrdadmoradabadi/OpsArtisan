@@ -5,12 +5,14 @@
 .git
 .gitignore
 .gitattributes
-
-# CI/CD
 .github
 .gitlab-ci.yml
+
+# CI/CD
+.circleci
 .travis.yml
 Jenkinsfile
+azure-pipelines.yml
 
 # Documentation
 README.md
@@ -22,6 +24,7 @@ docs/
 # Development files
 .vscode
 .idea
+.editorconfig
 *.swp
 *.swo
 *~
@@ -29,6 +32,7 @@ docs/
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Logs
 logs
@@ -36,6 +40,7 @@ logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
 {% if runtime == "node" %}
 # Node.js
@@ -44,10 +49,16 @@ npm-debug.log
 .npm
 .eslintcache
 .node_repl_history
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
 
 # Build outputs
 dist/
 build/
+out/
 coverage/
 .nyc_output
 
@@ -67,14 +78,17 @@ env/
 venv/
 ENV/
 .venv
-pip-log.txt
-pip-delete-this-directory.txt
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 *.egg-info/
 dist/
 build/
+.tox/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
 
 {% elif runtime == "go" %}
 # Go
@@ -87,12 +101,14 @@ build/
 *.out
 vendor/
 go.work
+go.work.sum
+.air/
 
 {% elif runtime == "rust" %}
 # Rust
 target/
-Cargo.lock
 **/*.rs.bk
+*.pdb
 
 {% elif runtime == "java" %}
 # Java
@@ -104,11 +120,37 @@ target/
 .mvn/
 mvnw
 mvnw.cmd
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+{% elif runtime == "php" %}
+# PHP
+vendor/
+composer.phar
+.phpunit.result.cache
+
+{% elif runtime == "ruby" %}
+# Ruby
+.bundle/
+vendor/bundle/
+*.gem
+.ruby-version
+
+{% elif runtime == ".net" %}
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+packages/
 {% endif %}
 
 # Testing
 test/
 tests/
+spec/
 *.test
 *.spec.js
 *.spec.ts
@@ -117,3 +159,19 @@ tests/
 Dockerfile*
 docker-compose*.yml
 .dockerignore
+.hadolint.yaml
+
+# Kubernetes
+k8s/
+*.yaml
+*.yml
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# Misc
+tmp/
+temp/
+*.tmp

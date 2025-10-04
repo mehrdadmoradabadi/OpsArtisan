@@ -1,0 +1,90 @@
+.PHONY: help build run stop clean test lint push
+
+# Variables
+IMAGE_NAME := {{ app_name }}
+IMAGE_TAG := latest
+CONTAINER_NAME := {{ app_name }}
+PORT := {{ port }}
+
+help: ## Show this help message
+	@echo 'Usage: make [target]'
+	@echo ''
+	@echo 'Available targets:'
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+build: ## Build Docker image
+	@echo "Building $(IMAGE_NAME):$(IMAGE_TAG)..."
+	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
+
+build-no-cache: ## Build Docker image without cache
+	@echo "Building $(IMAGE_NAME):$(IMAGE_TAG) without cache..."
+	docker build --no-cache -t $(IMAGE_NAME):$(IMAGE_TAG) .
+
+run: ## Run container
+	@echo "Running $(CONTAINER_NAME)..."
+	docker run -d \
+		--name $(CONTAINER_NAME) \
+		-p $(PORT):$(PORT) \
+		--env-file .env \
+		$(IMAGE_NAME):$(IMAGE_TAG)
+
+run-it: ## Run container interactively
+	@echo "Running $(CONTAINER_NAME) interactively..."
+	docker run -it --rm \
+		--name $(CONTAINER_NAME) \
+		-p $(PORT):$(PORT) \
+		--env-file .env \
+		$(IMAGE_NAME):$(IMAGE_TAG)
+
+stop: ## Stop container
+	@echo "Stopping $(CONTAINER_NAME)..."
+	-docker stop $(CONTAINER_NAME)
+	-docker rm $(CONTAINER_NAME)
+
+logs: ## Show container logs
+	docker logs -f $(CONTAINER_NAME)
+
+shell: ## Open shell in running container
+	docker exec -it $(CONTAINER_NAME) /bin/sh
+
+clean: ## Remove container and image
+	@echo "Cleaning up..."
+	-docker stop $(CONTAINER_NAME)
+	-docker rm $(CONTAINER_NAME)
+	-docker rmi $(IMAGE_NAME):$(IMAGE_TAG)
+
+test: ## Test Docker build
+	@echo "Testing Docker build..."
+	-docker build --target builder -t $(IMAGE_NAME):test .
+	-docker rmi $(IMAGE_NAME):test
+
+lint: ## Lint Dockerfile
+	@echo "Linting Dockerfile..."
+	-hadolint Dockerfile
+
+scan: ## Scan image for vulnerabilities
+	@echo "Scanning $(IMAGE_NAME):$(IMAGE_TAG)..."
+	-docker scan $(IMAGE_NAME):$(IMAGE_TAG)
+
+dive: ## Analyze image layers
+	@echo "Analyzing $(IMAGE_NAME):$(IMAGE_TAG)..."
+	dive $(IMAGE_NAME):$(IMAGE_TAG)
+
+compose-up: ## Start with docker-compose
+	docker-compose up -d
+
+compose-down: ## Stop docker-compose
+	docker-compose down
+
+compose-logs: ## Show docker-compose logs
+	docker-compose logs -f
+
+push: ## Push image to registry
+	@echo "Pushing $(IMAGE_NAME):$(IMAGE_TAG)..."
+	docker push $(IMAGE_NAME):$(IMAGE_TAG)
+
+tag: ## Tag image (usage: make tag TAG=v1.0.0)
+	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_NAME):$(TAG)
+
+size: ## Show image size
+	@docker images $(IMAGE_NAME):$(IMAGE_TAG) --format "table {{"{{"}}.Repository{{"}}"}}\t{{"{{"}}.Tag{{"}}"}}\t{{"{{"}}.Size{{"}}"}}}"

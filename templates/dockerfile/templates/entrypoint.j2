@@ -1,0 +1,34 @@
+#!/bin/sh
+# Entrypoint script for {{ app_name }}
+
+set -e
+
+echo "==> Starting {{ app_name }}"
+echo "==> Environment: ${APP_ENV:-production}"
+echo "==> Port: {{ port }}"
+
+# Wait for dependencies (example)
+# if [ -n "$DB_HOST" ]; then
+#   echo "==> Waiting for database..."
+#   until nc -z "$DB_HOST" "${DB_PORT:-5432}"; do
+#     echo "Database is unavailable - sleeping"
+#     sleep 1
+#   done
+#   echo "==> Database is up"
+# fi
+
+# Run migrations (example)
+# echo "==> Running migrations..."
+{% if runtime == "node" %}
+# npm run migrate
+{% elif runtime == "python" %}
+# python manage.py migrate
+{% elif runtime == "ruby" %}
+# bundle exec rake db:migrate
+{% elif runtime == ".net" %}
+# dotnet ef database update
+{% endif %}
+
+# Execute the main command
+echo "==> Starting application..."
+exec "$@"

@@ -1,59 +1,178 @@
 {
   "id": "dockerfile",
   "title": "Dockerfile Generator",
-  "description": "Production-ready Dockerfile with multi-stage builds, security best practices, and non-root user",
+  "description": "Production-ready Dockerfile with multi-stage builds, security best practices, optimized caching, and non-root user",
+  "category": "Containers",
+  "tags": ["docker", "containers", "dockerfile", "build"],
+  "version": "2.0.0",
+
+  "dependencies": [],
+
+  "required_tools": [
+    "docker"
+  ],
+
+  "optional_tools": [
+    "hadolint",
+    "dive",
+    "docker-compose"
+  ],
+
+  "environment_defaults": {
+    "dev": {
+      "configuration_mode": "simple",
+      "multi_stage": false,
+      "non_root": false,
+      "health_check": true,
+      "optimization_level": "basic",
+      "cache_optimization": false,
+      "security_scanning": false,
+      "package_manager": "npm"
+    },
+    "staging": {
+      "configuration_mode": "advanced",
+      "multi_stage": true,
+      "non_root": true,
+      "health_check": true,
+      "optimization_level": "standard",
+      "cache_optimization": true,
+      "security_scanning": true,
+      "package_manager": "npm"
+    },
+    "prod": {
+      "configuration_mode": "advanced",
+      "multi_stage": true,
+      "non_root": true,
+      "health_check": true,
+      "optimization_level": "aggressive",
+      "cache_optimization": true,
+      "security_scanning": true,
+      "distroless": false,
+      "package_manager": "npm"
+    }
+  },
+
   "prompts": [
     {
+      "id": "configuration_mode",
+      "type": "choice",
+      "label": "Configuration mode",
+      "choices": ["simple", "advanced"],
+      "default": "simple",
+      "description": "Simple: Basic Dockerfile with defaults | Advanced: Full customization with all features"
+    },
+    {
       "id": "runtime",
-      "type": "select",
+      "type": "choice",
       "label": "Select runtime",
-      "choices": ["node", "python", "go", "rust", "java"],
+      "choices": ["node", "python", "go", "rust", "java", "php", "ruby", ".net"],
       "default": "node"
     },
     {
       "id": "runtime_version",
-      "type": "text",
+      "type": "string",
       "label": "Runtime version (e.g., 20, 3.11, 1.21)",
       "default": "20"
     },
     {
       "id": "app_name",
-      "type": "text",
+      "type": "string",
       "label": "Application name",
-      "default": "myapp"
+      "default": "myapp",
+      "validation": "^[a-z0-9-]+$"
     },
     {
       "id": "port",
-      "type": "number",
+      "type": "integer",
       "label": "Application port",
-      "default": "3000"
+      "default": 3000,
+      "min": 1,
+      "max": 65535
     },
     {
       "id": "multi_stage",
-      "type": "confirm",
+      "type": "bool",
       "label": "Use multi-stage build?",
-      "default": true
+      "default": true,
+      "description": "Reduces final image size significantly"
     },
     {
       "id": "non_root",
-      "type": "confirm",
+      "type": "bool",
       "label": "Run as non-root user?",
-      "default": true
+      "default": true,
+      "description": "Security best practice"
     },
     {
       "id": "health_check",
-      "type": "confirm",
+      "type": "bool",
       "label": "Add HEALTHCHECK instruction?",
       "default": true
     },
     {
+      "id": "health_endpoint",
+      "type": "string",
+      "label": "Health check endpoint",
+      "default": "/health",
+      "condition": "health_check"
+    },
+    {
       "id": "package_manager",
-      "type": "select",
-      "label": "Package manager (Node only)",
+      "type": "choice",
+      "label": "Package manager (Node.js only)",
       "choices": ["npm", "yarn", "pnpm"],
-      "default": "npm"
+      "default": "npm",
+      "condition": "runtime == 'node'"
+    },
+    {
+      "id": "optimization_level",
+      "type": "choice",
+      "label": "Image optimization level",
+      "choices": ["basic", "standard", "aggressive"],
+      "default": "standard"
+    },
+    {
+      "id": "cache_optimization",
+      "type": "bool",
+      "label": "Enable build cache optimization?",
+      "default": true,
+      "description": "Use BuildKit mount cache for faster builds"
+    },
+    {
+      "id": "distroless",
+      "type": "bool",
+      "label": "Use distroless base image?",
+      "default": false,
+      "condition": "runtime in ['go', 'java', 'rust'] and multi_stage",
+      "description": "Minimal base image with only runtime dependencies"
+    },
+    {
+      "id": "include_ca_certificates",
+      "type": "bool",
+      "label": "Include CA certificates?",
+      "default": true,
+      "description": "Required for HTTPS connections"
+    },
+    {
+      "id": "timezone",
+      "type": "string",
+      "label": "Container timezone",
+      "default": "UTC"
+    },
+    {
+      "id": "labels",
+      "type": "bool",
+      "label": "Add OCI labels?",
+      "default": true
+    },
+    {
+      "id": "build_args",
+      "type": "bool",
+      "label": "Include build arguments?",
+      "default": false
     }
   ],
+
   "outputs": [
     {
       "path": "Dockerfile",
@@ -62,24 +181,164 @@
     {
       "path": ".dockerignore",
       "template": "dockerignore.j2"
+    },
+    {
+      "path": "docker-compose.yml",
+      "template": "docker_compose.j2"
+    },
+    {
+      "path": ".env.example",
+      "template": "env_example.j2"
+    },
+    {
+      "path": "docker/entrypoint.sh",
+      "template": "entrypoint.j2"
+    },
+    {
+      "path": ".hadolint.yaml",
+      "template": "hadolint.j2"
+    },
+    {
+      "path": "Makefile",
+      "template": "makefile.j2"
+    },
+    {
+      "path": "README.md",
+      "template": "readme.j2"
     }
   ],
+
   "validators": [
     {
-      "command": "docker build --dry-run -f Dockerfile . 2>/dev/null || hadolint Dockerfile",
-      "description": "Validate Dockerfile syntax"
+      "command": "hadolint Dockerfile",
+      "description": "Lint Dockerfile with hadolint",
+      "timeout": 10,
+      "optional": true
+    },
+    {
+      "command": "docker build --dry-run -f Dockerfile .",
+      "description": "Validate Dockerfile syntax",
+      "timeout": 30,
+      "optional": true
     }
   ],
+
   "tests": [
     {
-      "command": "docker build -t test-image -f Dockerfile . && docker rmi test-image",
-      "description": "Test Docker build"
+      "command": "docker build --target builder -t {{ app_name }}:builder -f Dockerfile .",
+      "description": "Test build stage",
+      "cleanup": "docker rmi {{ app_name }}:builder",
+      "condition": "multi_stage"
+    },
+    {
+      "command": "docker build -t {{ app_name }}:test -f Dockerfile . && docker rmi {{ app_name }}:test",
+      "description": "Test full build",
+      "cleanup": null
     }
   ],
+
+  "hooks": {
+    "pre_generation": [
+      {
+        "type": "check",
+        "command": "docker --version",
+        "description": "Check Docker installation",
+        "on_failure": "fail"
+      }
+    ],
+    "post_generation": [
+      {
+        "type": "shell",
+        "command": "chmod +x docker/entrypoint.sh",
+        "description": "Make entrypoint executable",
+        "on_failure": "warn"
+      },
+      {
+        "type": "shell",
+        "command": "cp .env.example .env",
+        "description": "Create .env from template",
+        "on_failure": "ignore"
+      },
+      {
+        "type": "info",
+        "message": "Review and customize the generated Dockerfile for your application",
+        "on_failure": "ignore"
+      }
+    ]
+  },
+
   "next_steps": [
-    "Review the generated Dockerfile and adjust dependencies",
-    "Build the image: docker build -t {{app_name}}:latest .",
-    "Run the container: docker run -p {{port}}:{{port}} {{app_name}}:latest",
-    "Consider adding a docker-compose.yml for local development"
-  ]
+    "Review the generated Dockerfile and adjust for your application",
+    "Update .env with your configuration",
+    "Build the image: make build",
+    "Or: docker build -t {{ app_name }}:latest .",
+    "Run the container: make run",
+    "Or: docker run -p {{ port }}:{{ port }} {{ app_name }}:latest",
+    "Test with docker-compose: docker-compose up",
+    "Scan for vulnerabilities: docker scan {{ app_name }}:latest",
+    "Optimize image size: dive {{ app_name }}:latest"
+  ],
+
+  "example_usage": "opsartisan new dockerfile --runtime node --runtime-version 20",
+
+  "documentation": {
+    "readme": "README.md",
+    "examples": [
+      {
+        "title": "Simple Node.js application",
+        "command": "opsartisan new dockerfile --runtime node --runtime-version 20",
+        "description": "Basic Dockerfile with npm, defaults applied"
+      },
+      {
+        "title": "Advanced Node.js with pnpm",
+        "command": "opsartisan new dockerfile --configuration-mode advanced --runtime node --runtime-version 20 --package-manager pnpm",
+        "description": "Full featured with custom package manager"
+      },
+      {
+        "title": "Python microservice",
+        "command": "opsartisan new dockerfile --runtime python --runtime-version 3.11 --multi-stage --non-root",
+        "description": "Secure Python microservice"
+      },
+      {
+        "title": "Go application with distroless",
+        "command": "opsartisan new dockerfile --preset prod --runtime go --distroless",
+        "description": "Minimal Go binary with distroless base"
+      },
+      {
+        "title": "Java Spring Boot",
+        "command": "opsartisan new dockerfile --runtime java --runtime-version 17 --port 8080",
+        "description": "Spring Boot application"
+      }
+    ],
+    "links": [
+      {
+        "title": "Docker Best Practices",
+        "url": "https://docs.docker.com/develop/dev-best-practices/"
+      },
+      {
+        "title": "Dockerfile Reference",
+        "url": "https://docs.docker.com/engine/reference/builder/"
+      },
+      {
+        "title": "hadolint",
+        "url": "https://github.com/hadolint/hadolint"
+      },
+      {
+        "title": "dive - Image Layer Explorer",
+        "url": "https://github.com/wagoodman/dive"
+      }
+    ],
+    "best_practices": [
+      "Use multi-stage builds to reduce image size",
+      "Run as non-root user for security",
+      "Minimize number of layers",
+      "Use .dockerignore to exclude unnecessary files",
+      "Pin base image versions",
+      "Order layers from least to most frequently changed",
+      "Use build cache effectively",
+      "Scan images for vulnerabilities",
+      "Add health checks for container orchestration",
+      "Use specific tags instead of 'latest'"
+    ]
+  }
 }
