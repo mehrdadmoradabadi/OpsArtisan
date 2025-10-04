@@ -1,8 +1,61 @@
 {
   "id": "vhost",
-  "title": "Web Server vhost (Nginx / Apache)",
-  "description": "Generate Nginx or Apache vhost config with optional TLS.",
+  "title": "Web Server Virtual Host (Nginx / Apache)",
+  "description": "Generate production-ready Nginx or Apache virtual host configurations with TLS, security headers, and performance optimizations",
+  "category": "Web Server",
+  "tags": ["nginx", "apache", "vhost", "ssl", "tls", "web", "https"],
+  "version": "2.0.0",
+
+  "dependencies": [],
+
+  "required_tools": [],
+
+  "optional_tools": [
+    "nginx",
+    "apache2",
+    "certbot"
+  ],
+
+  "environment_defaults": {
+    "dev": {
+      "configuration_mode": "simple",
+      "tls_enabled": false,
+      "http2_enabled": false,
+      "security_headers": false,
+      "rate_limiting": false,
+      "caching": false
+    },
+    "staging": {
+      "configuration_mode": "advanced",
+      "tls_enabled": true,
+      "http2_enabled": true,
+      "security_headers": true,
+      "rate_limiting": false,
+      "caching": true,
+      "redirect_http_to_https": true
+    },
+    "prod": {
+      "configuration_mode": "advanced",
+      "tls_enabled": true,
+      "http2_enabled": true,
+      "security_headers": true,
+      "rate_limiting": true,
+      "caching": true,
+      "redirect_http_to_https": true,
+      "ssl_stapling": true,
+      "gzip_enabled": true
+    }
+  },
+
   "prompts": [
+    {
+      "id": "configuration_mode",
+      "type": "choice",
+      "label": "Configuration mode",
+      "choices": ["simple", "advanced"],
+      "default": "simple",
+      "description": "Simple: Basic vhost | Advanced: Production-ready with security & performance"
+    },
     {
       "id": "server_type",
       "type": "choice",
@@ -14,7 +67,15 @@
       "id": "server_name",
       "type": "string",
       "label": "Server name (domain)",
-      "default": "example.com"
+      "default": "example.com",
+      "validation": "^[a-z0-9.-]+$"
+    },
+    {
+      "id": "server_aliases",
+      "type": "string",
+      "label": "Server aliases (comma-separated)",
+      "default": "www.example.com",
+      "condition": "configuration_mode == 'advanced'"
     },
     {
       "id": "root_dir",
@@ -25,30 +86,243 @@
     {
       "id": "tls_enabled",
       "type": "bool",
-      "label": "Enable TLS?",
+      "label": "Enable TLS/HTTPS?",
       "default": true
     },
     {
       "id": "tls_cert",
       "type": "string",
       "label": "TLS certificate path",
-      "default": "/etc/ssl/certs/example.crt"
+      "default": "/etc/letsencrypt/live/example.com/fullchain.pem",
+      "condition": "tls_enabled"
     },
     {
       "id": "tls_key",
       "type": "string",
-      "label": "TLS key path",
-      "default": "/etc/ssl/private/example.key"
+      "label": "TLS private key path",
+      "default": "/etc/letsencrypt/live/example.com/privkey.pem",
+      "condition": "tls_enabled"
+    },
+    {
+      "id": "redirect_http_to_https",
+      "type": "bool",
+      "label": "Redirect HTTP to HTTPS?",
+      "default": true,
+      "condition": "tls_enabled && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "http2_enabled",
+      "type": "bool",
+      "label": "Enable HTTP/2?",
+      "default": true,
+      "condition": "tls_enabled && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "application_type",
+      "type": "choice",
+      "label": "Application type",
+      "choices": ["static", "php", "proxy", "spa"],
+      "default": "static",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "proxy_pass",
+      "type": "string",
+      "label": "Proxy pass URL",
+      "default": "http://localhost:3000",
+      "condition": "application_type == 'proxy' && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "php_version",
+      "type": "string",
+      "label": "PHP version (e.g., 8.2)",
+      "default": "8.2",
+      "condition": "application_type == 'php' && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "security_headers",
+      "type": "bool",
+      "label": "Add security headers?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "rate_limiting",
+      "type": "bool",
+      "label": "Enable rate limiting?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced' && server_type == 'nginx'"
+    },
+    {
+      "id": "gzip_enabled",
+      "type": "bool",
+      "label": "Enable gzip compression?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "caching",
+      "type": "bool",
+      "label": "Enable browser caching?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "access_log",
+      "type": "string",
+      "label": "Access log path",
+      "default": "/var/log/{{ server_type }}/{{ server_name }}-access.log",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "error_log",
+      "type": "string",
+      "label": "Error log path",
+      "default": "/var/log/{{ server_type }}/{{ server_name }}-error.log",
+      "condition": "configuration_mode == 'advanced'"
     }
   ],
+
   "outputs": [
     {
-      "path": "{{ server_type }}-vhost.conf",
-      "template": "{{ server_type }}.j2"
+      "path": "{{ server_name }}.conf",
+      "template": "nginx.j2",
+      "condition": "server_type == 'nginx'"
+    },
+    {
+      "path": "{{ server_name }}.conf",
+      "template": "apache.j2",
+      "condition": "server_type == 'apache'"
+    },
+    {
+      "path": "{{ server_name }}-ssl.conf",
+      "template": "nginx_ssl_params.j2",
+      "condition": "tls_enabled && configuration_mode == 'advanced' && server_type == 'nginx'"
+    },
+    {
+      "path": "scripts/enable-site.sh",
+      "template": "enable_site.j2"
+    },
+    {
+      "path": "scripts/test-config.sh",
+      "template": "test_config.j2"
+    },
+    {
+      "path": "scripts/setup-certbot.sh",
+      "template": "setup_certbot.j2",
+      "condition": "tls_enabled"
+    },
+    {
+      "path": "README.md",
+      "template": "readme.j2"
     }
   ],
+
+  "validators": [
+    {
+      "command": "nginx -t -c {{ server_name }}.conf",
+      "description": "Test Nginx configuration",
+      "timeout": 10,
+      "condition": "server_type == 'nginx'",
+      "optional": true
+    },
+    {
+      "command": "apache2ctl configtest",
+      "description": "Test Apache configuration",
+      "timeout": 10,
+      "condition": "server_type == 'apache'",
+      "optional": true
+    }
+  ],
+
+  "tests": [
+    {
+      "command": "bash scripts/test-config.sh",
+      "description": "Test web server configuration",
+      "cleanup": null
+    }
+  ],
+
+  "hooks": {
+    "post_generation": [
+      {
+        "type": "shell",
+        "command": "chmod +x scripts/*.sh",
+        "description": "Make scripts executable",
+        "on_failure": "warn"
+      },
+      {
+        "type": "info",
+        "message": "Review configuration before deploying to production",
+        "on_failure": "ignore"
+      }
+    ]
+  },
+
   "next_steps": [
-    "Copy config file to your {{ server_type }} sites-available directory.",
-    "Enable site and reload {{ server_type }}."
-  ]
+    "Review generated configuration: cat {{ server_name }}.conf",
+    "Test configuration: sudo bash scripts/test-config.sh",
+    "Enable site: sudo bash scripts/enable-site.sh",
+    "If using Let's Encrypt: sudo bash scripts/setup-certbot.sh",
+    "Test in browser: https://{{ server_name }}",
+    "Check logs: sudo tail -f /var/log/{{ server_type }}/{{ server_name }}-*.log"
+  ],
+
+  "example_usage": "opsartisan new vhost --server-name example.com --tls-enabled",
+
+  "documentation": {
+    "readme": "README.md",
+    "examples": [
+      {
+        "title": "Simple static site",
+        "command": "opsartisan new vhost --server-name example.com",
+        "description": "Basic HTTP virtual host"
+      },
+      {
+        "title": "HTTPS with Let's Encrypt",
+        "command": "opsartisan new vhost --configuration-mode advanced --server-name example.com --tls-enabled",
+        "description": "Secure site with automatic cert setup"
+      },
+      {
+        "title": "PHP application",
+        "command": "opsartisan new vhost --configuration-mode advanced --application-type php --php-version 8.2",
+        "description": "PHP-FPM enabled virtual host"
+      },
+      {
+        "title": "Reverse proxy",
+        "command": "opsartisan new vhost --configuration-mode advanced --application-type proxy --proxy-pass http://localhost:3000",
+        "description": "Proxy to backend application"
+      }
+    ],
+    "links": [
+      {
+        "title": "Nginx Documentation",
+        "url": "https://nginx.org/en/docs/"
+      },
+      {
+        "title": "Apache Documentation",
+        "url": "https://httpd.apache.org/docs/"
+      },
+      {
+        "title": "Let's Encrypt",
+        "url": "https://letsencrypt.org/"
+      },
+      {
+        "title": "Mozilla SSL Configuration Generator",
+        "url": "https://ssl-config.mozilla.org/"
+      }
+    ],
+    "best_practices": [
+      "Always use HTTPS in production",
+      "Enable HTTP/2 for better performance",
+      "Add security headers (HSTS, CSP, etc.)",
+      "Use strong SSL/TLS configuration",
+      "Enable gzip compression",
+      "Set proper cache headers",
+      "Implement rate limiting",
+      "Regular security audits with SSL Labs",
+      "Keep certificates up to date",
+      "Monitor logs for issues"
+    ]
+  }
 }

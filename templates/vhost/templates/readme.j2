@@ -1,0 +1,403 @@
+# Virtual Host: {{ server_name }}
+
+{% if configuration_mode == 'simple' %}
+Basic {{ server_type }} virtual host configuration.
+{% else %}
+Production-ready {{ server_type }} virtual host with security and performance optimizations.
+{% endif %}
+
+## Configuration Details
+
+- **Server Type:** {{ server_type }}
+- **Server Name:** {{ server_name }}
+{% if server_aliases and configuration_mode == 'advanced' %}
+- **Aliases:** {{ server_aliases }}
+{% endif %}
+- **Document Root:** {{ root_dir }}
+{% if tls_enabled %}
+- **HTTPS:** Enabled
+{% if http2_enabled and configuration_mode == 'advanced' %}
+- **HTTP/2:** Enabled
+{% endif %}
+{% endif %}
+{% if application_type and configuration_mode == 'advanced' %}
+- **Application Type:** {{ application_type }}
+{% endif %}
+
+## Features
+
+{% if configuration_mode == 'advanced' %}
+{% if tls_enabled %}
+✅ HTTPS/TLS with modern cipher suites
+{% if redirect_http_to_https %}
+✅ HTTP to HTTPS redirect
+{% endif %}
+{% endif %}
+{% if http2_enabled %}
+✅ HTTP/2 support
+{% endif %}
+{% if security_headers %}
+✅ Security headers (HSTS, CSP, X-Frame-Options, etc.)
+{% endif %}
+{% if gzip_enabled %}
+✅ Gzip compression
+{% endif %}
+{% if caching %}
+✅ Browser caching for static assets
+{% endif %}
+{% if rate_limiting and server_type == 'nginx' %}
+✅ Rate limiting
+{% endif %}
+{% if application_type == 'php' %}
+✅ PHP-FPM support (PHP {{ php_version }})
+{% endif %}
+{% if application_type == 'proxy' %}
+✅ Reverse proxy to {{ proxy_pass }}
+{% endif %}
+{% if application_type == 'spa' %}
+✅ SPA routing support
+{% endif %}
+{% else %}
+✅ Basic {{ server_type }} configuration
+{% if tls_enabled %}
+✅ HTTPS/TLS enabled
+{% endif %}
+{% endif %}
+
+## Installation
+
+### 1. Test Configuration
+
+```bash
+sudo bash scripts/test-config.sh
+```
+
+### 2. Enable Site
+
+```bash
+sudo bash scripts/enable-site.sh
+```
+
+{% if tls_enabled %}
+### 3. Setup SSL Certificate (Let's Encrypt)
+
+```bash
+sudo bash scripts/setup-certbot.sh your-email@example.com
+```
+
+Or manually with certbot:
+
+```bash
+{% if server_type == 'nginx' %}
+sudo certbot --nginx -d {{ server_name }}{% if server_aliases and configuration_mode == 'advanced' %} -d {{ server_aliases.split(',')[0].strip() }}{% endif %}
+{% else %}
+sudo certbot --apache -d {{ server_name }}{% if server_aliases and configuration_mode == 'advanced' %} -d {{ server_aliases.split(',')[0].strip() }}{% endif %}
+{% endif %}
+```
+{% endif %}
+
+### 4. Verify
+
+Visit your site:
+
+```bash
+{% if tls_enabled %}
+curl -I https://{{ server_name }}
+{% else %}
+curl -I http://{{ server_name }}
+{% endif %}
+```
+
+## Manual Installation
+
+### Nginx
+
+```bash
+# Copy config
+sudo cp {{ server_name }}.conf /etc/nginx/sites-available/
+{% if configuration_mode == 'advanced' and tls_enabled %}
+sudo cp {{ server_name }}-ssl.conf /etc/nginx/snippets/
+{% endif %}
+
+# Enable site
+sudo ln -s /etc/nginx/sites-available/{{ server_name }}.conf /etc/nginx/sites-enabled/
+
+# Test and reload
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### Apache
+
+```bash
+# Copy config
+sudo cp {{ server_name }}.conf /etc/apache2/sites-available/
+
+# Enable required modules
+{% if tls_enabled %}
+sudo a2enmod ssl
+{% endif %}
+{% if http2_enabled and configuration_mode == 'advanced' %}
+sudo a2enmod http2
+{% endif %}
+sudo a2enmod rewrite
+{% if security_headers and configuration_mode == 'advanced' %}
+sudo a2enmod headers
+{% endif %}
+{% if application_type == 'proxy' and configuration_mode == 'advanced' %}
+sudo a2enmod proxy proxy_http
+{% endif %}
+
+# Enable site
+sudo a2ensite {{ server_name }}
+
+# Test and reload
+sudo apache2ctl configtest
+sudo systemctl reload apache2
+```
+
+## Directory Structure
+
+Create the document root:
+
+```bash
+sudo mkdir -p {{ root_dir }}
+{% if application_type == 'static' or application_type == 'spa' %}
+# Add your static files
+echo "Hello World" | sudo tee {{ root_dir }}/index.html
+{% elif application_type == 'php' %}
+# Add your PHP files
+echo "<?php phpinfo(); ?>" | sudo tee {{ root_dir }}/index.php
+{% endif %}
+
+# Set permissions
+{% if server_type == 'nginx' %}
+sudo chown -R www-data:www-data {{ root_dir }}
+{% else %}
+sudo chown -R www-data:www-data {{ root_dir }}
+{% endif %}
+sudo chmod -R 755 {{ root_dir }}
+```
+
+## Testing
+
+### Test Configuration
+
+```bash
+{% if server_type == 'nginx' %}
+sudo nginx -t
+{% else %}
+sudo apache2ctl configtest
+{% endif %}
+```
+
+### Test Connection
+
+```bash
+# Local test
+{% if tls_enabled %}
+curl -k https://{{ server_name }}
+{% else %}
+curl http://{{ server_name }}
+{% endif %}
+
+# With headers
+curl -I {% if tls_enabled %}https{% else %}http{% endif %}://{{ server_name }}
+
+# Health check
+curl {% if tls_enabled %}https{% else %}http{% endif %}://{{ server_name }}/health
+```
+
+{% if tls_enabled %}
+### Test SSL Configuration
+
+```bash
+# Using OpenSSL
+openssl s_client -connect {{ server_name }}:443 -servername {{ server_name }}
+
+# Check certificate
+echo | openssl s_client -showcerts -servername {{ server_name }} -connect {{ server_name }}:443 2>/dev/null | openssl x509 -inform pem -noout -text
+
+# Online SSL test
+# Visit: https://www.ssllabs.com/ssltest/analyze.html?d={{ server_name }}
+```
+{% endif %}
+
+## Monitoring
+
+### View Logs
+
+```bash
+{% if configuration_mode == 'advanced' %}
+# Access logs
+sudo tail -f {{ access_log }}
+
+# Error logs
+sudo tail -f {{ error_log }}
+{% else %}
+# Access logs
+sudo tail -f /var/log/{{ server_type }}/access.log
+
+# Error logs
+sudo tail -f /var/log/{{ server_type }}/error.log
+{% endif %}
+
+# Follow both
+sudo tail -f /var/log/{{ server_type }}/*.log
+```
+
+### Check Status
+
+```bash
+# Service status
+sudo systemctl status {{ server_type }}
+
+# Check if site is responding
+curl -o /dev/null -s -w "%{http_code}\n" {% if tls_enabled %}https{% else %}http{% endif %}://{{ server_name }}
+```
+
+## Troubleshooting
+
+### Site Not Loading
+
+```bash
+# Check if {{ server_type }} is running
+sudo systemctl status {{ server_type }}
+
+# Check if port is listening
+sudo netstat -tulpn | grep {% if tls_enabled %}443{% else %}80{% endif %}
+
+# Check logs
+sudo tail -50 /var/log/{{ server_type }}/error.log
+```
+
+### SSL Certificate Issues
+
+```bash
+# Check certificate
+sudo certbot certificates
+
+# Renew certificate
+sudo certbot renew --dry-run
+
+# Force renewal
+sudo certbot renew --force-renewal
+```
+
+### Permission Denied
+
+```bash
+# Fix ownership
+sudo chown -R www-data:www-data {{ root_dir }}
+
+# Fix permissions
+sudo chmod -R 755 {{ root_dir }}
+
+# SELinux (if applicable)
+sudo chcon -Rt httpd_sys_content_t {{ root_dir }}
+```
+
+## Maintenance
+
+### Reload Configuration
+
+```bash
+{% if server_type == 'nginx' %}
+sudo systemctl reload nginx
+{% else %}
+sudo systemctl reload apache2
+{% endif %}
+```
+
+### Restart Service
+
+```bash
+sudo systemctl restart {{ server_type }}
+```
+
+{% if tls_enabled %}
+### Certificate Renewal
+
+Certificates auto-renew via certbot timer:
+
+```bash
+# Check timer status
+sudo systemctl status certbot.timer
+
+# Test renewal
+sudo certbot renew --dry-run
+
+# Force renewal
+sudo certbot renew
+```
+{% endif %}
+
+### Disable Site
+
+```bash
+{% if server_type == 'nginx' %}
+sudo rm /etc/nginx/sites-enabled/{{ server_name }}.conf
+sudo systemctl reload nginx
+{% else %}
+sudo a2dissite {{ server_name }}
+sudo systemctl reload apache2
+{% endif %}
+```
+
+## Security Checklist
+
+{% if configuration_mode == 'advanced' %}
+- [{% if tls_enabled %}x{% else %} {% endif %}] HTTPS enabled
+- [{% if redirect_http_to_https %}x{% else %} {% endif %}] HTTP to HTTPS redirect
+- [{% if security_headers %}x{% else %} {% endif %}] Security headers configured
+- [{% if rate_limiting and server_type == 'nginx' %}x{% else %} {% endif %}] Rate limiting enabled
+{% endif %}
+- [ ] Firewall configured (allow ports 80, 443)
+- [ ] Regular security updates applied
+- [ ] Log monitoring enabled
+- [ ] Backup strategy in place
+{% if tls_enabled %}
+- [ ] SSL certificate auto-renewal tested
+- [ ] SSL configuration tested on SSL Labs
+{% endif %}
+
+## Performance Optimization
+
+{% if configuration_mode == 'advanced' %}
+{% if gzip_enabled %}
+✅ Gzip compression enabled
+{% endif %}
+{% if caching %}
+✅ Browser caching configured
+{% endif %}
+{% if http2_enabled %}
+✅ HTTP/2 enabled
+{% endif %}
+
+Additional optimizations to consider:
+{% else %}
+Consider enabling:
+{% endif %}
+
+- CDN for static assets
+- Image optimization
+- Minification of CSS/JS
+- Database query optimization
+- Redis/Memcached caching
+{% if server_type == 'nginx' %}
+- FastCGI cache (for PHP)
+{% endif %}
+
+## Resources
+
+- [{{ server_type | capitalize }} Documentation]({% if server_type == 'nginx' %}https://nginx.org/en/docs/{% else %}https://httpd.apache.org/docs/{% endif %})
+{% if tls_enabled %}
+- [Let's Encrypt Documentation](https://letsencrypt.org/docs/)
+- [SSL Labs Test](https://www.ssllabs.com/ssltest/)
+- [Mozilla SSL Configuration](https://ssl-config.mozilla.org/)
+{% endif %}
+- [HTTP Security Headers](https://securityheaders.com/)
+
+---
+
+**Generated by OpsArtisan**
