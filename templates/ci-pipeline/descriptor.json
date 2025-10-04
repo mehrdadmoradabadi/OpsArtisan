@@ -1,37 +1,312 @@
 {
   "id": "ci-pipeline",
-  "title": "CI/CD Pipeline (GitHub / GitLab)",
-  "description": "Generate CI pipeline YAML for GitHub Actions or GitLab CI.",
+  "title": "CI/CD Pipeline (GitHub Actions / GitLab CI / Jenkins)",
+  "description": "Generate production-ready CI/CD pipelines with testing, building, security scanning, and deployment",
+  "category": "CI/CD",
+  "tags": ["ci", "cd", "github-actions", "gitlab-ci", "jenkins", "pipeline", "automation"],
+  "version": "2.0.0",
+
+  "dependencies": [],
+
+  "required_tools": [],
+
+  "optional_tools": [
+    "docker",
+    "kubectl",
+    "git"
+  ],
+
+  "environment_defaults": {
+    "dev": {
+      "configuration_mode": "simple",
+      "include_tests": true,
+      "include_lint": false,
+      "include_security_scan": false,
+      "include_deploy": false,
+      "include_docker": false
+    },
+    "staging": {
+      "configuration_mode": "advanced",
+      "include_tests": true,
+      "include_lint": true,
+      "include_security_scan": true,
+      "include_deploy": true,
+      "include_docker": true,
+      "deploy_environment": "staging"
+    },
+    "prod": {
+      "configuration_mode": "advanced",
+      "include_tests": true,
+      "include_lint": true,
+      "include_security_scan": true,
+      "include_deploy": true,
+      "include_docker": true,
+      "include_notifications": true,
+      "deploy_environment": "production",
+      "require_approval": true
+    }
+  },
+
   "prompts": [
+    {
+      "id": "configuration_mode",
+      "type": "choice",
+      "label": "Configuration mode",
+      "choices": ["simple", "advanced"],
+      "default": "simple",
+      "description": "Simple: Basic CI with tests | Advanced: Full pipeline with security, deployment"
+    },
     {
       "id": "ci_type",
       "type": "choice",
-      "label": "Choose CI platform",
-      "choices": ["github", "gitlab"],
+      "label": "Choose CI/CD platform",
+      "choices": ["github", "gitlab", "jenkins"],
       "default": "github"
     },
     {
       "id": "language",
       "type": "choice",
-      "label": "Project language",
-      "choices": ["python", "node", "go"],
+      "label": "Project language/runtime",
+      "choices": ["python", "node", "go", "rust", "java", "php", "ruby", ".net"],
       "default": "python"
+    },
+    {
+      "id": "language_version",
+      "type": "string",
+      "label": "Language version",
+      "default": "3.11",
+      "description": "e.g., 3.11 for Python, 20 for Node.js, 1.21 for Go"
+    },
+    {
+      "id": "package_manager",
+      "type": "choice",
+      "label": "Package manager (Node.js only)",
+      "choices": ["npm", "yarn", "pnpm"],
+      "default": "npm",
+      "condition": "language == 'node'"
+    },
+    {
+      "id": "include_tests",
+      "type": "bool",
+      "label": "Include test stage?",
+      "default": true
+    },
+    {
+      "id": "test_command",
+      "type": "string",
+      "label": "Test command",
+      "default": "pytest",
+      "condition": "include_tests && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "include_lint",
+      "type": "bool",
+      "label": "Include linting/code quality?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "include_security_scan",
+      "type": "bool",
+      "label": "Include security scanning?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "include_docker",
+      "type": "bool",
+      "label": "Build Docker image?",
+      "default": false
+    },
+    {
+      "id": "docker_registry",
+      "type": "choice",
+      "label": "Docker registry",
+      "choices": ["dockerhub", "ghcr", "gcr", "ecr"],
+      "default": "dockerhub",
+      "condition": "include_docker && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "docker_image_name",
+      "type": "string",
+      "label": "Docker image name",
+      "default": "myapp",
+      "condition": "include_docker"
     },
     {
       "id": "include_deploy",
       "type": "bool",
-      "label": "Include deploy stage?",
+      "label": "Include deployment stage?",
       "default": false
+    },
+    {
+      "id": "deploy_target",
+      "type": "choice",
+      "label": "Deployment target",
+      "choices": ["kubernetes", "heroku", "aws", "vercel", "netlify", "custom"],
+      "default": "kubernetes",
+      "condition": "include_deploy && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "deploy_environment",
+      "type": "string",
+      "label": "Deployment environment",
+      "default": "production",
+      "condition": "include_deploy && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "require_approval",
+      "type": "bool",
+      "label": "Require manual approval for deployment?",
+      "default": false,
+      "condition": "include_deploy && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "include_notifications",
+      "type": "bool",
+      "label": "Include notifications (Slack, Discord)?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "trigger_on",
+      "type": "string",
+      "label": "Trigger on branches (comma-separated)",
+      "default": "main,master",
+      "condition": "configuration_mode == 'advanced'"
     }
   ],
+
   "outputs": [
     {
-      "path": ".{{ ci_type }}/pipeline.yml",
-      "template": "{{ ci_type }}.j2"
+      "path": ".github/workflows/ci.yml",
+      "template": "github.j2",
+      "condition": "ci_type == 'github'"
+    },
+    {
+      "path": ".gitlab-ci.yml",
+      "template": "gitlab.j2",
+      "condition": "ci_type == 'gitlab'"
+    },
+    {
+      "path": "Jenkinsfile",
+      "template": "jenkins.j2",
+      "condition": "ci_type == 'jenkins'"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "template": "dependabot.j2",
+      "condition": "ci_type == 'github' && configuration_mode == 'advanced'"
+    },
+    {
+      "path": "scripts/deploy.sh",
+      "template": "deploy.j2",
+      "condition": "include_deploy"
+    },
+    {
+      "path": "README.md",
+      "template": "readme.j2"
     }
   ],
+
+  "validators": [
+    {
+      "command": "yamllint .github/workflows/ci.yml",
+      "description": "Validate GitHub Actions YAML",
+      "timeout": 10,
+      "condition": "ci_type == 'github'",
+      "optional": true
+    },
+    {
+      "command": "yamllint .gitlab-ci.yml",
+      "description": "Validate GitLab CI YAML",
+      "timeout": 10,
+      "condition": "ci_type == 'gitlab'",
+      "optional": true
+    }
+  ],
+
+  "tests": [
+    {
+      "command": "git add . && git status",
+      "description": "Verify files are ready to commit",
+      "cleanup": null
+    }
+  ],
+
+  "hooks": {
+    "post_generation": [
+      {
+        "type": "shell",
+        "command": "chmod +x scripts/*.sh",
+        "description": "Make scripts executable",
+        "on_failure": "warn",
+        "condition": "include_deploy"
+      },
+      {
+        "type": "info",
+        "message": "Commit the pipeline file to trigger the first build",
+        "on_failure": "ignore"
+      }
+    ]
+  },
+
   "next_steps": [
-    "Commit pipeline file to your repo.",
-    "Push to trigger build on {{ ci_type }}."
-  ]
+    "Review generated pipeline configuration",
+    "Update secrets in your CI/CD platform settings",
+    "Commit and push to trigger the pipeline:",
+    "  git add .",
+    "  git commit -m 'Add CI/CD pipeline'",
+    "  git push origin main",
+    "Monitor the pipeline execution in your {{ ci_type }} dashboard"
+  ],
+
+  "example_usage": "opsartisan new ci-pipeline --ci-type github --language python",
+
+  "documentation": {
+    "readme": "README.md",
+    "examples": [
+      {
+        "title": "Simple Python CI",
+        "command": "opsartisan new ci-pipeline --ci-type github --language python",
+        "description": "Basic CI with tests"
+      },
+      {
+        "title": "Full Node.js pipeline",
+        "command": "opsartisan new ci-pipeline --configuration-mode advanced --ci-type github --language node --include-docker --include-deploy",
+        "description": "Complete pipeline with Docker and deployment"
+      },
+      {
+        "title": "GitLab CI for Go",
+        "command": "opsartisan new ci-pipeline --ci-type gitlab --language go --include-tests",
+        "description": "GitLab CI with Go testing"
+      }
+    ],
+    "links": [
+      {
+        "title": "GitHub Actions Documentation",
+        "url": "https://docs.github.com/en/actions"
+      },
+      {
+        "title": "GitLab CI/CD Documentation",
+        "url": "https://docs.gitlab.com/ee/ci/"
+      },
+      {
+        "title": "Jenkins Documentation",
+        "url": "https://www.jenkins.io/doc/"
+      }
+    ],
+    "best_practices": [
+      "Use caching to speed up builds",
+      "Run tests in parallel when possible",
+      "Fail fast on critical errors",
+      "Use secrets for sensitive data",
+      "Implement proper branch protection",
+      "Add status badges to README",
+      "Use matrix builds for multiple versions",
+      "Implement security scanning",
+      "Use manual approval for production deploys",
+      "Monitor pipeline performance"
+    ]
+  }
 }

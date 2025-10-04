@@ -1,0 +1,337 @@
+# CI/CD Pipeline
+
+{% if configuration_mode == 'simple' %}
+Basic CI pipeline for {{ language }} using {{ ci_type }}.
+{% else %}
+Production-ready CI/CD pipeline for {{ language }} using {{ ci_type }}.
+{% endif %}
+
+## Pipeline Configuration
+
+- **Platform:** {{ ci_type }}
+- **Language:** {{ language }} {{ language_version }}
+{% if include_tests %}
+- **Testing:** Enabled
+{% endif %}
+{% if include_lint and configuration_mode == 'advanced' %}
+- **Linting:** Enabled
+{% endif %}
+{% if include_security_scan and configuration_mode == 'advanced' %}
+- **Security Scanning:** Enabled
+{% endif %}
+{% if include_docker %}
+- **Docker Build:** Enabled
+{% endif %}
+{% if include_deploy %}
+- **Deployment:** {{ deploy_target if configuration_mode == 'advanced' else 'Enabled' }}
+{% endif %}
+
+## Pipeline Stages
+
+{% if include_lint and configuration_mode == 'advanced' %}
+### 1. Lint
+- Code style checks
+- Static analysis
+{% if language == 'python' %}
+- flake8, black, pylint
+{% elif language == 'node' %}
+- ESLint
+{% elif language == 'go' %}
+- golangci-lint
+{% endif %}
+
+{% endif %}
+### {% if include_lint and configuration_mode == 'advanced' %}2{% else %}1{% endif %}. Test
+- Unit tests
+- Integration tests
+{% if configuration_mode == 'advanced' %}
+- Code coverage reports
+{% endif %}
+
+{% if include_security_scan and configuration_mode == 'advanced' %}
+### 3. Security Scan
+- Vulnerability scanning with Trivy
+{% if language == 'python' %}
+- Safety check for dependencies
+{% elif language == 'node' %}
+- npm audit
+{% endif %}
+
+{% endif %}
+{% if include_docker %}
+### {% if include_security_scan and configuration_mode == 'advanced' %}4{% elif include_lint and configuration_mode == 'advanced' %}3{% else %}2{% endif %}. Build
+- Docker image build
+{% if configuration_mode == 'advanced' %}
+- Push to {{ docker_registry if docker_registry else 'registry' }}
+- Tag with commit SHA and latest
+{% endif %}
+
+{% endif %}
+{% if include_deploy %}
+### {% if include_docker %}{% if include_security_scan and configuration_mode == 'advanced' %}5{% elif include_lint and configuration_mode == 'advanced' %}4{% else %}3{% endif %}{% elif include_security_scan and configuration_mode == 'advanced' %}4{% elif include_lint and configuration_mode == 'advanced' %}3{% else %}2{% endif %}. Deploy
+- Deploy to {{ deploy_environment if configuration_mode == 'advanced' else 'production' }}
+{% if require_approval and configuration_mode == 'advanced' %}
+- Requires manual approval
+{% endif %}
+{% if deploy_target == 'kubernetes' and configuration_mode == 'advanced' %}
+- Kubernetes rolling deployment
+{% endif %}
+
+{% endif %}
+
+## Setup
+
+### 1. Required Secrets
+
+Configure these secrets in your {{ ci_type }} settings:
+
+{% if ci_type == 'github' %}
+Go to: Repository → Settings → Secrets and variables → Actions
+
+{% if include_docker and configuration_mode == 'advanced' %}
+{% if docker_registry == 'dockerhub' %}
+- `DOCKER_USERNAME` - Docker Hub username
+- `DOCKER_PASSWORD` - Docker Hub password/token
+{% elif docker_registry == 'ghcr' %}
+- `GITHUB_TOKEN` - Automatically provided
+{% elif docker_registry == 'gcr' %}
+- `GCR_PROJECT_ID` - Google Cloud project ID
+- `GCR_SERVICE_KEY` - Service account key JSON
+{% elif docker_registry == 'ecr' %}
+- `AWS_ACCESS_KEY_ID` - AWS access key
+- `AWS_SECRET_ACCESS_KEY` - AWS secret key
+- `AWS_REGION` - AWS region
+{% endif %}
+{% endif %}
+
+{% if include_deploy %}
+{% if deploy_target == 'kubernetes' and configuration_mode == 'advanced' %}
+- `KUBECONFIG` - Kubernetes config file (base64 encoded)
+{% elif deploy_target == 'heroku' and configuration_mode == 'advanced' %}
+- `HEROKU_API_KEY` - Heroku API key
+- `HEROKU_APP_NAME` - Heroku app name
+- `HEROKU_EMAIL` - Heroku account email
+{% elif deploy_target == 'vercel' and configuration_mode == 'advanced' %}
+- `VERCEL_TOKEN` - Vercel token
+- `VERCEL_ORG_ID` - Vercel organization ID
+- `VERCEL_PROJECT_ID` - Vercel project ID
+{% else %}
+- `DEPLOY_KEY` - Deployment key/token
+{% endif %}
+{% endif %}
+
+{% if include_notifications and configuration_mode == 'advanced' %}
+- `SLACK_WEBHOOK` - Slack webhook URL
+{% endif %}
+
+{% elif ci_type == 'gitlab' %}
+Go to: Project → Settings → CI/CD → Variables
+
+{% if include_docker and configuration_mode == 'advanced' %}
+- `CI_REGISTRY_USER` - Registry username
+- `CI_REGISTRY_PASSWORD` - Registry password
+{% endif %}
+
+{% if include_deploy %}
+- `DEPLOY_KEY` - Deployment key/token
+{% endif %}
+
+{% elif ci_type == 'jenkins' %}
+Go to: Jenkins → Credentials → System → Global credentials
+
+{% if include_docker and configuration_mode == 'advanced' %}
+- `docker-hub` - Username with password (Docker Hub credentials)
+{% endif %}
+
+{% if include_deploy %}
+- `deploy-key` - Secret text (Deployment key)
+{% endif %}
+
+{% if include_notifications and configuration_mode == 'advanced' %}
+- Configure Slack plugin in Jenkins settings
+{% endif %}
+{% endif %}
+
+### 2. Trigger Pipeline
+
+Push to repository:
+
+```bash
+git add .
+git commit -m "Add CI/CD pipeline"
+git push origin {% if configuration_mode == 'advanced' and trigger_on %}{{ trigger_on.split(',')[0].strip() }}{% else %}main{% endif %}
+```
+
+### 3. Monitor Pipeline
+
+{% if ci_type == 'github' %}
+View pipeline: Repository → Actions
+{% elif ci_type == 'gitlab' %}
+View pipeline: Project → CI/CD → Pipelines
+{% elif ci_type == 'jenkins' %}
+View pipeline: Jenkins → Your Job → Build History
+{% endif %}
+
+## Local Testing
+
+Before pushing, test locally:
+
+{% if language == 'python' %}
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run tests
+pytest
+
+# Run linting
+flake8 .
+black --check .
+```
+
+{% elif language == 'node' %}
+```bash
+# Install dependencies
+{{ package_manager if package_manager else 'npm' }} install
+
+# Run tests
+{{ package_manager if package_manager else 'npm' }} test
+
+# Run linting
+{{ package_manager if package_manager else 'npm' }} run lint
+```
+
+{% elif language == 'go' %}
+```bash
+# Download dependencies
+go mod download
+
+# Run tests
+go test ./...
+
+# Run linting
+golangci-lint run
+```
+
+{% elif language == 'rust' %}
+```bash
+# Run tests
+cargo test
+
+# Run linting
+cargo clippy
+cargo fmt --check
+```
+{% endif %}
+
+{% if include_docker %}
+## Docker Build
+
+Build image locally:
+
+```bash
+docker build -t {{ docker_image_name }}:local .
+docker run -p 8080:8080 {{ docker_image_name }}:local
+```
+{% endif %}
+
+## Customization
+
+### Modify Pipeline
+
+{% if ci_type == 'github' %}
+Edit `.github/workflows/ci.yml`
+{% elif ci_type == 'gitlab' %}
+Edit `.gitlab-ci.yml`
+{% elif ci_type == 'jenkins' %}
+Edit `Jenkinsfile`
+{% endif %}
+
+### Update Test Command
+
+{% if configuration_mode == 'advanced' %}
+Current test command: `{{ test_command if test_command else 'default' }}`
+
+{% endif %}
+Change the test command in the pipeline file to match your project.
+
+{% if include_deploy %}
+### Customize Deployment
+
+Edit `scripts/deploy.sh` to add your deployment logic.
+
+{% endif %}
+
+## Troubleshooting
+
+### Pipeline Fails on Test Stage
+
+1. Run tests locally first
+2. Check test output in pipeline logs
+3. Ensure all dependencies are installed
+
+### Docker Build Fails
+
+1. Test Dockerfile locally: `docker build .`
+2. Check Docker syntax
+3. Verify base image is accessible
+
+{% if include_deploy %}
+### Deployment Fails
+
+1. Verify secrets are configured correctly
+2. Test deployment script locally
+3. Check deployment target is accessible
+4. Review deployment logs
+
+{% endif %}
+
+## Best Practices
+
+- ✅ Always run tests locally before pushing
+- ✅ Use meaningful commit messages
+- ✅ Keep secrets secure, never commit them
+- ✅ Monitor pipeline execution regularly
+{% if configuration_mode == 'advanced' %}
+- ✅ Review security scan results
+- ✅ Keep dependencies up to date
+- ✅ Use branch protection rules
+{% endif %}
+{% if include_deploy %}
+- ✅ Test deployments in staging first
+{% if require_approval and configuration_mode == 'advanced' %}
+- ✅ Always review changes before approving deploy
+{% endif %}
+{% endif %}
+
+## Status Badge
+
+Add to your README.md:
+
+{% if ci_type == 'github' %}
+```markdown
+![CI](https://github.com/USERNAME/REPO/workflows/CI/badge.svg)
+```
+
+{% elif ci_type == 'gitlab' %}
+```markdown
+![CI](https://gitlab.com/USERNAME/REPO/badges/main/pipeline.svg)
+```
+{% endif %}
+
+## Resources
+
+{% if ci_type == 'github' %}
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [Workflow Syntax](https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions)
+{% elif ci_type == 'gitlab' %}
+- [GitLab CI/CD Documentation](https://docs.gitlab.com/ee/ci/)
+- [CI/CD YAML Reference](https://docs.gitlab.com/ee/ci/yaml/)
+{% elif ci_type == 'jenkins' %}
+- [Jenkins Documentation](https://www.jenkins.io/doc/)
+- [Pipeline Syntax](https://www.jenkins.io/doc/book/pipeline/syntax/)
+{% endif %}
+
+---
+
+**Generated by OpsArtisan**
