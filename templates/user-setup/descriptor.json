@@ -1,21 +1,308 @@
 {
   "id": "user-setup",
   "title": "User Account & Sudo Setup",
-  "description": "Create a new user with sudo privileges.",
+  "description": "Create new user accounts with customizable permissions, SSH keys, and security settings",
+  "category": "System Administration",
+  "tags": ["user", "sudo", "security", "ssh", "administration"],
+  "version": "2.0.0",
+
+  "dependencies": [],
+
+  "required_tools": [
+    "useradd",
+    "usermod"
+  ],
+
+  "optional_tools": [
+    "ssh-keygen"
+  ],
+
+  "environment_defaults": {
+    "dev": {
+      "configuration_mode": "simple",
+      "sudo_access": true,
+      "password_required": false,
+      "ssh_key_setup": false,
+      "shell": "/bin/bash"
+    },
+    "staging": {
+      "configuration_mode": "advanced",
+      "sudo_access": true,
+      "password_required": true,
+      "ssh_key_setup": true,
+      "shell": "/bin/bash",
+      "password_expiry": false
+    },
+    "prod": {
+      "configuration_mode": "advanced",
+      "sudo_access": true,
+      "password_required": true,
+      "ssh_key_setup": true,
+      "shell": "/bin/bash",
+      "password_expiry": true,
+      "disable_root_login": true,
+      "umask": "0027"
+    }
+  },
+
   "prompts": [
-    {"id": "username", "type": "string", "label": "New username", "default": "deploy"}
+    {
+      "id": "configuration_mode",
+      "type": "choice",
+      "label": "Configuration mode",
+      "choices": ["simple", "advanced"],
+      "default": "simple",
+      "description": "Simple: Basic user with sudo | Advanced: Full security customization"
+    },
+    {
+      "id": "username",
+      "type": "string",
+      "label": "New username",
+      "default": "deploy",
+      "validation": "^[a-z][a-z0-9_-]*$"
+    },
+    {
+      "id": "full_name",
+      "type": "string",
+      "label": "Full name (GECOS)",
+      "default": "Deploy User",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "sudo_access",
+      "type": "bool",
+      "label": "Grant sudo privileges?",
+      "default": true
+    },
+    {
+      "id": "sudo_nopasswd",
+      "type": "bool",
+      "label": "Allow sudo without password?",
+      "default": false,
+      "condition": "sudo_access && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "shell",
+      "type": "choice",
+      "label": "Login shell",
+      "choices": ["/bin/bash", "/bin/zsh", "/bin/sh"],
+      "default": "/bin/bash",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "home_directory",
+      "type": "string",
+      "label": "Home directory",
+      "default": "/home/{{ username }}",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "create_home",
+      "type": "bool",
+      "label": "Create home directory?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "ssh_key_setup",
+      "type": "bool",
+      "label": "Setup SSH key authentication?",
+      "default": false
+    },
+    {
+      "id": "ssh_public_key",
+      "type": "string",
+      "label": "SSH public key (paste here)",
+      "default": "",
+      "condition": "ssh_key_setup"
+    },
+    {
+      "id": "disable_password_auth",
+      "type": "bool",
+      "label": "Disable password authentication?",
+      "default": false,
+      "condition": "ssh_key_setup && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "password_required",
+      "type": "bool",
+      "label": "Set initial password?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "password_expiry",
+      "type": "bool",
+      "label": "Enable password expiration?",
+      "default": false,
+      "condition": "password_required && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "password_expiry_days",
+      "type": "integer",
+      "label": "Password expiry (days)",
+      "default": 90,
+      "min": 1,
+      "max": 365,
+      "condition": "password_expiry && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "additional_groups",
+      "type": "string",
+      "label": "Additional groups (comma-separated)",
+      "default": "docker,www-data",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "uid",
+      "type": "integer",
+      "label": "User ID (UID)",
+      "default": 1000,
+      "min": 1000,
+      "max": 65535,
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "umask",
+      "type": "string",
+      "label": "Default umask",
+      "default": "0022",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "disable_root_login",
+      "type": "bool",
+      "label": "Disable root SSH login?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'"
+    }
   ],
+
   "outputs": [
-    {"path": "create-user.sh", "template": "create-user.j2"}
+    {
+      "path": "scripts/create-user.sh",
+      "template": "create-user.j2"
+    },
+    {
+      "path": "scripts/configure-ssh.sh",
+      "template": "configure_ssh.j2",
+      "condition": "ssh_key_setup"
+    },
+    {
+      "path": "scripts/harden-ssh.sh",
+      "template": "harden_ssh.j2",
+      "condition": "disable_root_login && configuration_mode == 'advanced'"
+    },
+    {
+      "path": "scripts/setup-sudoers.sh",
+      "template": "setup_sudoers.j2",
+      "condition": "sudo_access"
+    },
+    {
+      "path": "authorized_keys",
+      "template": "authorized_keys.j2",
+      "condition": "ssh_key_setup && ssh_public_key"
+    },
+    {
+      "path": "README.md",
+      "template": "readme.j2"
+    }
   ],
+
+  "validators": [
+    {
+      "command": "bash -n scripts/create-user.sh",
+      "description": "Validate script syntax",
+      "timeout": 10
+    },
+    {
+      "command": "id {{ username }}",
+      "description": "Check if user already exists",
+      "timeout": 5,
+      "optional": true
+    }
+  ],
+
+  "tests": [
+    {
+      "command": "bash -n scripts/*.sh",
+      "description": "Validate all scripts",
+      "cleanup": null
+    }
+  ],
+
+  "hooks": {
+    "post_generation": [
+      {
+        "type": "shell",
+        "command": "chmod +x scripts/*.sh",
+        "description": "Make scripts executable",
+        "on_failure": "warn"
+      },
+      {
+        "type": "shell",
+        "command": "chmod 600 authorized_keys",
+        "description": "Secure authorized_keys file",
+        "on_failure": "warn",
+        "condition": "ssh_key_setup"
+      },
+      {
+        "type": "info",
+        "message": "Review scripts before running with sudo/root privileges",
+        "on_failure": "ignore"
+      }
+    ]
+  },
+
   "next_steps": [
-    "Run the generated script as root:",
-    "sudo bash create-user.sh\n",
-    "Verify the user exists:",
-    "id deploy",
-    "Confirm sudo privileges:",
-    "sudo -l -U deploy\n",
-    "Optionally, set a secure password or configure SSH key access:",
-    "passwd deploy\nmkdir -p /home/deploy/.ssh\nnano /home/deploy/.ssh/authorized_keys\nchown -R deploy:deploy /home/deploy/.ssh\nchmod 700 /home/deploy/.ssh\nchmod 600 /home/deploy/.ssh/authorized_keys"
-  ]
+    "Review generated scripts in scripts/ directory",
+    "Run as root: sudo bash scripts/create-user.sh",
+    "If SSH configured: sudo bash scripts/configure-ssh.sh",
+    "Test user login: su - {{ username }}",
+    "Test sudo access: sudo -u {{ username }} sudo -v",
+    "Secure the server: sudo bash scripts/harden-ssh.sh (if generated)"
+  ],
+
+  "example_usage": "opsartisan new user-setup --username deploy --sudo-access",
+
+  "documentation": {
+    "readme": "README.md",
+    "examples": [
+      {
+        "title": "Simple deployment user",
+        "command": "opsartisan new user-setup --username deploy",
+        "description": "Basic user with sudo access"
+      },
+      {
+        "title": "Advanced with SSH key",
+        "command": "opsartisan new user-setup --configuration-mode advanced --username deploy --ssh-key-setup",
+        "description": "Full security setup with SSH keys"
+      },
+      {
+        "title": "Service user without sudo",
+        "command": "opsartisan new user-setup --username appuser --no-sudo-access --shell /bin/sh",
+        "description": "Restricted service account"
+      }
+    ],
+    "links": [
+      {
+        "title": "Linux User Management",
+        "url": "https://www.linux.com/training-tutorials/how-manage-users-groups-linux/"
+      },
+      {
+        "title": "SSH Key Authentication",
+        "url": "https://www.ssh.com/academy/ssh/public-key-authentication"
+      }
+    ],
+    "best_practices": [
+      "Always use SSH keys for authentication",
+      "Disable root SSH login",
+      "Use strong passwords or disable password auth",
+      "Set password expiration policies",
+      "Use sudo instead of root access",
+      "Assign users to appropriate groups only",
+      "Regular audit of user accounts",
+      "Remove inactive accounts promptly"
+    ]
+  }
 }

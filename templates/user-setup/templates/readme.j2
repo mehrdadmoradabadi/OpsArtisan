@@ -1,0 +1,249 @@
+# User Setup: {{ username }}
+
+{% if configuration_mode == 'simple' %}
+Simple user configuration with sudo access.
+{% else %}
+Advanced user configuration with full security features.
+{% endif %}
+
+## User Details
+
+- **Username:** {{ username }}
+{% if configuration_mode == 'advanced' %}
+- **Full Name:** {{ full_name }}
+- **Shell:** {{ shell }}
+- **Home Directory:** {{ home_directory }}
+{% if uid %}
+- **UID:** {{ uid }}
+{% endif %}
+{% else %}
+- **Shell:** /bin/bash
+- **Home Directory:** /home/{{ username }}
+{% endif %}
+- **Sudo Access:** {% if sudo_access %}Yes{% if sudo_nopasswd and configuration_mode == 'advanced' %} (no password required){% endif %}{% else %}No{% endif %}
+{% if ssh_key_setup %}
+- **SSH Key Auth:** Enabled
+{% endif %}
+{% if password_required and configuration_mode == 'advanced' %}
+- **Password Auth:** Enabled
+{% if password_expiry %}
+- **Password Expiry:** {{ password_expiry_days }} days
+{% endif %}
+{% endif %}
+
+## Installation
+
+### 1. Create User
+
+Run as root:
+
+```bash
+sudo bash scripts/create-user.sh
+```
+
+{% if ssh_key_setup %}
+### 2. Configure SSH
+
+```bash
+sudo bash scripts/configure-ssh.sh
+```
+{% endif %}
+
+{% if sudo_access %}
+### 3. Configure Sudo
+
+```bash
+sudo bash scripts/setup-sudoers.sh
+```
+{% endif %}
+
+{% if disable_root_login and configuration_mode == 'advanced' %}
+### 4. Harden SSH (Optional but Recommended)
+
+**WARNING:** Test your SSH connection before running this!
+
+```bash
+sudo bash scripts/harden-ssh.sh
+```
+{% endif %}
+
+## Testing
+
+### Test User Login
+
+```bash
+su - {{ username }}
+```
+
+{% if sudo_access %}
+### Test Sudo Access
+
+```bash
+sudo -u {{ username }} sudo -v
+```
+
+Or login as user and run:
+
+```bash
+su - {{ username }}
+sudo whoami  # Should output: root
+```
+{% endif %}
+
+{% if ssh_key_setup %}
+### Test SSH Connection
+
+From your local machine:
+
+```bash
+ssh {{ username }}@your-server-hostname
+```
+
+If using a specific key:
+
+```bash
+ssh -i ~/.ssh/your_key {{ username }}@your-server-hostname
+```
+{% endif %}
+
+## Security Notes
+
+{% if configuration_mode == 'advanced' %}
+{% if disable_password_auth %}
+- ⚠️ Password authentication is disabled - SSH key required
+{% endif %}
+{% if disable_root_login %}
+- ⚠️ Root SSH login will be disabled
+{% endif %}
+{% if sudo_nopasswd %}
+- ⚠️ Sudo without password is enabled (convenient but less secure)
+{% endif %}
+{% endif %}
+
+### Best Practices Applied
+
+{% if ssh_key_setup %}
+✅ SSH key authentication configured
+{% endif %}
+{% if sudo_access %}
+✅ Sudo access for administrative tasks
+{% endif %}
+{% if password_expiry and configuration_mode == 'advanced' %}
+✅ Password expiration policy enabled
+{% endif %}
+{% if configuration_mode == 'advanced' %}
+✅ Custom umask for file permissions
+{% endif %}
+
+### Recommendations
+
+1. **Always test SSH access** before closing your current session
+2. **Keep a backup** of working SSH configuration
+3. **Use strong SSH keys** (RSA 4096-bit or Ed25519)
+4. **Regularly audit** user accounts and permissions
+5. **Enable 2FA** for additional security (not included in this setup)
+6. **Monitor logs** for unauthorized access attempts
+7. **Update regularly** and apply security patches
+
+## Managing the User
+
+### Change Password
+
+```bash
+sudo passwd {{ username }}
+```
+
+### Lock Account
+
+```bash
+sudo passwd -l {{ username }}
+```
+
+### Unlock Account
+
+```bash
+sudo passwd -u {{ username }}
+```
+
+### Delete User
+
+```bash
+# Remove user and home directory
+sudo userdel -r {{ username }}
+
+# Remove sudoers file
+sudo rm -f /etc/sudoers.d/{{ username }}
+```
+
+### View User Info
+
+```bash
+id {{ username }}
+groups {{ username }}
+sudo -l -U {{ username }}
+```
+
+## Troubleshooting
+
+### Cannot login with SSH key
+
+1. Check file permissions:
+   ```bash
+   ls -la {% if configuration_mode == 'advanced' %}{{ home_directory }}{% else %}/home/{{ username }}{% endif %}/.ssh/
+   # .ssh should be 700
+   # authorized_keys should be 600
+   ```
+
+2. Check SSH logs:
+   ```bash
+   sudo tail -f /var/log/auth.log
+   ```
+
+3. Test SSH in verbose mode:
+   ```bash
+   ssh -v {{ username }}@hostname
+   ```
+
+### Sudo not working
+
+1. Verify sudoers file:
+   ```bash
+   sudo visudo -c -f /etc/sudoers.d/{{ username }}
+   ```
+
+2. Check group membership:
+   ```bash
+   groups {{ username }}
+   # Should include 'sudo' group
+   ```
+
+### Locked out of SSH
+
+If you disabled root login and can't access:
+
+1. Access via console (VPS control panel)
+2. Restore SSH config backup:
+   ```bash
+   cp /etc/ssh/sshd_config.backup.* /etc/ssh/sshd_config
+   systemctl restart sshd
+   ```
+
+## Files Generated
+
+- `scripts/create-user.sh` - User creation script
+{% if ssh_key_setup %}
+- `scripts/configure-ssh.sh` - SSH configuration
+{% endif %}
+{% if sudo_access %}
+- `scripts/setup-sudoers.sh` - Sudo configuration
+{% endif %}
+{% if disable_root_login and configuration_mode == 'advanced' %}
+- `scripts/harden-ssh.sh` - SSH hardening
+{% endif %}
+{% if ssh_key_setup and ssh_public_key %}
+- `authorized_keys` - SSH public keys
+{% endif %}
+
+---
+
+**Generated by OpsArtisan**
