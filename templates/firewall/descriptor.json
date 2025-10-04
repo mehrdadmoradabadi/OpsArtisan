@@ -1,23 +1,449 @@
 {
   "id": "firewall",
-  "title": "Firewall Rules",
-  "description": "Generate UFW, iptables, or nftables rules.",
+  "title": "Firewall Rules Generator",
+  "description": "Generate comprehensive firewall rules for UFW, iptables, or nftables with security best practices, service presets, and zone-based configurations",
+  "category": "Security & Networking",
+  "tags": ["firewall", "security", "ufw", "iptables", "nftables", "network", "security-hardening"],
+  "version": "2.0.0",
+
+  "dependencies": [],
+
+  "required_tools": [],
+
+  "optional_tools": [
+    "ufw",
+    "iptables",
+    "nft",
+    "fail2ban"
+  ],
+
+  "environment_defaults": {
+    "dev": {
+      "configuration_mode": "simple",
+      "firewall_type": "ufw",
+      "default_policy": "deny",
+      "allow_ssh": true,
+      "enable_logging": true,
+      "rate_limiting": false
+    },
+    "staging": {
+      "configuration_mode": "advanced",
+      "firewall_type": "ufw",
+      "default_policy": "deny",
+      "allow_ssh": true,
+      "ssh_port": 22,
+      "enable_logging": true,
+      "rate_limiting": true,
+      "enable_ipv6": true
+    },
+    "prod": {
+      "configuration_mode": "advanced",
+      "firewall_type": "ufw",
+      "default_policy": "deny",
+      "allow_ssh": true,
+      "ssh_port": 22,
+      "ssh_rate_limit": true,
+      "enable_logging": true,
+      "log_level": "low",
+      "rate_limiting": true,
+      "enable_ipv6": true,
+      "block_countries": false,
+      "enable_fail2ban": true,
+      "connection_tracking": true
+    }
+  },
+
   "prompts": [
-    {"id": "fw_type", "type": "choice", "label": "Firewall type", "choices": ["ufw", "iptables", "nftables"], "default": "ufw"},
-    {"id": "allow_ports", "type": "string", "label": "Comma-separated allowed ports", "default": "22,80,443"}
+    {
+      "id": "configuration_mode",
+      "type": "choice",
+      "label": "Configuration mode",
+      "choices": ["simple", "advanced"],
+      "default": "simple",
+      "description": "Simple: Basic rules | Advanced: Full security with rate limiting, zones, logging"
+    },
+    {
+      "id": "firewall_type",
+      "type": "choice",
+      "label": "Firewall type",
+      "choices": ["ufw", "iptables", "nftables"],
+      "default": "ufw",
+      "description": "ufw: Easy to use | iptables: Traditional | nftables: Modern replacement"
+    },
+    {
+      "id": "server_role",
+      "type": "choice",
+      "label": "Server role preset",
+      "choices": ["custom", "web", "database", "api", "mailserver", "dns", "vpn"],
+      "default": "custom",
+      "description": "Preset configurations for common server roles"
+    },
+    {
+      "id": "default_policy",
+      "type": "choice",
+      "label": "Default policy",
+      "choices": ["deny", "reject", "accept"],
+      "default": "deny",
+      "description": "deny: Silent drop | reject: Send rejection | accept: Allow all (not recommended)"
+    },
+    {
+      "id": "allow_ssh",
+      "type": "bool",
+      "label": "Allow SSH access?",
+      "default": true,
+      "description": "Enable SSH for remote management"
+    },
+    {
+      "id": "ssh_port",
+      "type": "integer",
+      "label": "SSH port",
+      "default": 22,
+      "min": 1,
+      "max": 65535,
+      "condition": "allow_ssh",
+      "description": "SSH port (default: 22, consider changing for security)"
+    },
+    {
+      "id": "ssh_source_ips",
+      "type": "string",
+      "label": "SSH allowed IPs (comma-separated)",
+      "default": "",
+      "condition": "allow_ssh && configuration_mode == 'advanced'",
+      "description": "Restrict SSH to specific IPs (leave empty for all)"
+    },
+    {
+      "id": "ssh_rate_limit",
+      "type": "bool",
+      "label": "Rate limit SSH connections?",
+      "default": true,
+      "condition": "allow_ssh && configuration_mode == 'advanced'",
+      "description": "Protect against brute force attacks"
+    },
+    {
+      "id": "allowed_tcp_ports",
+      "type": "string",
+      "label": "Allowed TCP ports (comma-separated)",
+      "default": "80,443",
+      "description": "TCP ports to allow (e.g., 80,443,8080)"
+    },
+    {
+      "id": "allowed_udp_ports",
+      "type": "string",
+      "label": "Allowed UDP ports (comma-separated)",
+      "default": "",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "UDP ports to allow (e.g., 53,123)"
+    },
+    {
+      "id": "allow_ping",
+      "type": "bool",
+      "label": "Allow ICMP ping?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Allow ping requests (useful for monitoring)"
+    },
+    {
+      "id": "rate_limit_ping",
+      "type": "bool",
+      "label": "Rate limit ping?",
+      "default": true,
+      "condition": "allow_ping && configuration_mode == 'advanced'",
+      "description": "Prevent ping flooding"
+    },
+    {
+      "id": "enable_ipv6",
+      "type": "bool",
+      "label": "Enable IPv6 rules?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Apply same rules to IPv6"
+    },
+    {
+      "id": "enable_logging",
+      "type": "bool",
+      "label": "Enable firewall logging?",
+      "default": true,
+      "description": "Log blocked connections"
+    },
+    {
+      "id": "log_level",
+      "type": "choice",
+      "label": "Log level",
+      "choices": ["off", "low", "medium", "high", "full"],
+      "default": "low",
+      "condition": "enable_logging && configuration_mode == 'advanced'",
+      "description": "low: Blocks only | medium: More detail | high: All packets"
+    },
+    {
+      "id": "trusted_networks",
+      "type": "string",
+      "label": "Trusted networks (CIDR, comma-separated)",
+      "default": "",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Networks to fully trust (e.g., 192.168.1.0/24,10.0.0.0/8)"
+    },
+    {
+      "id": "blocked_ips",
+      "type": "string",
+      "label": "Blocked IP addresses (comma-separated)",
+      "default": "",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Specific IPs to block"
+    },
+    {
+      "id": "blocked_countries",
+      "type": "string",
+      "label": "Blocked countries (ISO codes)",
+      "default": "",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Country codes to block (e.g., CN,RU) - requires geoip"
+    },
+    {
+      "id": "allow_established",
+      "type": "bool",
+      "label": "Allow established connections?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Allow return traffic for established connections"
+    },
+    {
+      "id": "allow_loopback",
+      "type": "bool",
+      "label": "Allow loopback traffic?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Allow localhost connections"
+    },
+    {
+      "id": "block_invalid",
+      "type": "bool",
+      "label": "Block invalid packets?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Drop malformed packets"
+    },
+    {
+      "id": "syn_flood_protection",
+      "type": "bool",
+      "label": "Enable SYN flood protection?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Protect against SYN flood attacks"
+    },
+    {
+      "id": "port_scan_protection",
+      "type": "bool",
+      "label": "Enable port scan detection?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Detect and block port scanners"
+    },
+    {
+      "id": "rate_limiting",
+      "type": "bool",
+      "label": "Enable connection rate limiting?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Limit new connections per IP"
+    },
+    {
+      "id": "rate_limit_connections",
+      "type": "integer",
+      "label": "Max connections per minute",
+      "default": 30,
+      "min": 1,
+      "max": 1000,
+      "condition": "rate_limiting && configuration_mode == 'advanced'",
+      "description": "Maximum new connections per IP per minute"
+    },
+    {
+      "id": "enable_fail2ban_integration",
+      "type": "bool",
+      "label": "Generate fail2ban configuration?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Create fail2ban rules for additional protection"
+    },
+    {
+      "id": "docker_integration",
+      "type": "bool",
+      "label": "Docker integration?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Configure rules for Docker bridge network"
+    },
+    {
+      "id": "docker_network",
+      "type": "string",
+      "label": "Docker network CIDR",
+      "default": "172.17.0.0/16",
+      "condition": "docker_integration && configuration_mode == 'advanced'",
+      "description": "Docker bridge network range"
+    },
+    {
+      "id": "custom_rules",
+      "type": "string",
+      "label": "Custom rules (semicolon-separated)",
+      "default": "",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Additional custom rules"
+    },
+    {
+      "id": "persistence_method",
+      "type": "choice",
+      "label": "Persistence method",
+      "choices": ["netfilter-persistent", "iptables-persistent", "systemd", "rc-local"],
+      "default": "netfilter-persistent",
+      "condition": "firewall_type != 'ufw' && configuration_mode == 'advanced'",
+      "description": "How to save rules across reboots"
+    }
   ],
+
   "outputs": [
-    {"path": "firewall.rules", "template": "firewall.j2"}
+    {
+      "path": "firewall-rules.txt",
+      "template": "firewall_rules.j2"
+    },
+    {
+      "path": "scripts/apply-firewall.sh",
+      "template": "apply_firewall.j2"
+    },
+    {
+      "path": "scripts/backup-rules.sh",
+      "template": "backup_rules.j2"
+    },
+    {
+      "path": "scripts/test-firewall.sh",
+      "template": "test_firewall.j2",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "path": "scripts/monitor-firewall.sh",
+      "template": "monitor_firewall.j2",
+      "condition": "enable_logging"
+    },
+    {
+      "path": "fail2ban/jail.local",
+      "template": "fail2ban_jail.j2",
+      "condition": "enable_fail2ban_integration && configuration_mode == 'advanced'"
+    },
+    {
+      "path": "README.md",
+      "template": "readme.j2"
+    }
   ],
+
+  "validators": [
+    {
+      "command": "bash -n scripts/apply-firewall.sh",
+      "description": "Validate script syntax",
+      "timeout": 10
+    }
+  ],
+
+  "tests": [
+    {
+      "command": "bash -n scripts/*.sh",
+      "description": "Validate all scripts",
+      "cleanup": null
+    }
+  ],
+
+  "hooks": {
+    "post_generation": [
+      {
+        "type": "shell",
+        "command": "chmod +x scripts/*.sh",
+        "description": "Make scripts executable",
+        "on_failure": "warn"
+      },
+      {
+        "type": "info",
+        "message": "⚠️  CRITICAL: Review rules before applying to prevent lockout!",
+        "on_failure": "ignore"
+      },
+      {
+        "type": "info",
+        "message": "Test rules in safe environment first",
+        "on_failure": "ignore"
+      },
+      {
+        "type": "info",
+        "message": "Keep backup access method (console/IPMI) available",
+        "on_failure": "ignore"
+      }
+    ]
+  },
+
   "next_steps": [
-    "Review the allowed ports and adjust to match your security policy.",
-    "Apply rules:\n\nUFW:",
-    "sudo ufw allow 22",
-    "sudo ufw allow 80",
-    "sudo ufw enable\niptables:",
-    "sudo iptables-restore < firewall.rules\nnftables:",
-    "sudo nft -f firewall.rules",
-    "Test connectivity and ensure no essential ports are blocked.",
-    "Save rules for persistence across reboots."
-  ]
+    "⚠️  IMPORTANT: Review firewall-rules.txt carefully",
+    "Ensure SSH access is allowed before applying",
+    "Test in safe environment first",
+    "Have console/IPMI access ready",
+    "Backup current rules: sudo bash scripts/backup-rules.sh",
+    "Apply rules: sudo bash scripts/apply-firewall.sh",
+    "Test connectivity from allowed IPs",
+    "Monitor logs: sudo bash scripts/monitor-firewall.sh",
+    "If locked out: Access via console and run backup restore"
+  ],
+
+  "example_usage": "opsartisan new firewall --server-role web --allow-ssh --ssh-port 22",
+
+  "documentation": {
+    "readme": "README.md",
+    "examples": [
+      {
+        "title": "Simple web server",
+        "command": "opsartisan new firewall --server-role web --allow-ssh",
+        "description": "Basic firewall for web server (ports 22, 80, 443)"
+      },
+      {
+        "title": "Advanced web server with rate limiting",
+        "command": "opsartisan new firewall --configuration-mode advanced --server-role web --rate-limiting --ssh-rate-limit --enable-logging",
+        "description": "Hardened web server with DDoS protection"
+      },
+      {
+        "title": "Database server (restricted access)",
+        "command": "opsartisan new firewall --configuration-mode advanced --server-role database --ssh-source-ips '192.168.1.0/24'",
+        "description": "Database server accessible only from specific network"
+      },
+      {
+        "title": "Custom API server",
+        "command": "opsartisan new firewall --server-role custom --allowed-tcp-ports '22,8080,8443' --syn-flood-protection",
+        "description": "API server with custom ports"
+      }
+    ],
+    "links": [
+      {
+        "title": "UFW Documentation",
+        "url": "https://help.ubuntu.com/community/UFW"
+      },
+      {
+        "title": "iptables Tutorial",
+        "url": "https://www.netfilter.org/documentation/"
+      },
+      {
+        "title": "nftables Wiki",
+        "url": "https://wiki.nftables.org/"
+      },
+      {
+        "title": "Fail2ban Documentation",
+        "url": "https://www.fail2ban.org/"
+      }
+    ],
+    "best_practices": [
+      "Always test firewall rules in safe environment first",
+      "Keep console/IPMI access available",
+      "Use rate limiting to prevent DDoS",
+      "Enable logging for security monitoring",
+      "Regularly review and update rules",
+      "Use fail2ban for additional protection",
+      "Restrict SSH to specific IPs when possible",
+      "Change default SSH port for obscurity",
+      "Block invalid packets and common attacks",
+      "Document all allowed services",
+      "Backup rules before changes",
+      "Test after applying rules"
+    ]
+  }
 }

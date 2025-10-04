@@ -1,0 +1,727 @@
+# Firewall Configuration: {{ firewall_type|upper }}
+
+{% if configuration_mode == 'simple' %}
+Simple firewall configuration for basic security.
+{% else %}
+Advanced firewall configuration with comprehensive security features.
+{% endif %}
+
+## Configuration Details
+
+- **Firewall Type:** {{ firewall_type }}
+- **Default Policy:** {{ default_policy }}
+{% if server_role != 'custom' %}
+- **Server Role:** {{ server_role }}
+{% endif %}
+{% if allow_ssh %}
+- **SSH Access:** Enabled (Port {{ ssh_port }})
+{% if ssh_rate_limit and configuration_mode == 'advanced' %}
+  - Rate limiting enabled
+{% endif %}
+{% if ssh_source_ips and configuration_mode == 'advanced' %}
+  - Restricted to: {{ ssh_source_ips }}
+{% endif %}
+{% endif %}
+{% if allowed_tcp_ports %}
+- **TCP Ports:** {{ allowed_tcp_ports }}
+{% endif %}
+{% if allowed_udp_ports and configuration_mode == 'advanced' %}
+- **UDP Ports:** {{ allowed_udp_ports }}
+{% endif %}
+{% if enable_logging %}
+- **Logging:** Enabled{% if configuration_mode == 'advanced' %} (Level: {{ log_level }}){% endif %}
+{% endif %}
+{% if rate_limiting and configuration_mode == 'advanced' %}
+- **Rate Limiting:** {{ rate_limit_connections }} connections/min
+{% endif %}
+
+## ⚠️ CRITICAL SAFETY WARNINGS
+
+**BEFORE APPLYING FIREWALL RULES:**
+
+1. ✅ **Console Access:** Ensure you have physical or IPMI/KVM console access
+2. ✅ **SSH Access:** Verify SSH port ({{ ssh_port }}) is in allowed rules
+3. ✅ **Test Environment:** Test rules in non-production environment first
+4. ✅ **Backup:** Backup current rules before making changes
+5. ✅ **Time Window:** Apply during maintenance window
+
+**IF LOCKED OUT:**
+- Access server via console/IPMI
+- Restore backup: `bash scripts/backup-rules.sh restore`
+- Or flush rules temporarily
+
+## Quick Start
+
+### 1. Review Rules
+
+```bash
+# Review generated rules
+cat firewall-rules.txt
+
+# Verify SSH access is allowed
+grep -i "{{ ssh_port }}" firewall-rules.txt
+```
+
+### 2. Backup Current Rules
+
+```bash
+# Always backup first!
+sudo bash scripts/backup-rules.sh
+```
+
+### 3. Apply Firewall Rules
+
+```bash
+# Apply the rules
+sudo bash scripts/apply-firewall.sh
+```
+
+{% if configuration_mode == 'advanced' %}
+### 4. Test Configuration
+
+```bash
+# Run automated tests
+sudo bash scripts/test-firewall.sh
+```
+{% endif %}
+
+### 5. Verify Connectivity
+
+Test from another terminal/machine:
+```bash
+# Test SSH
+ssh -p {{ ssh_port }} user@server
+
+{% if server_role == 'web' %}
+# Test HTTP/HTTPS
+curl http://your-server
+curl https://your-server
+{% endif %}
+```
+
+## Management Commands
+
+### {{ firewall_type|upper }} Commands
+
+{% if firewall_type == 'ufw' %}
+```bash
+# Show status
+sudo ufw status verbose
+
+# Show numbered rules
+sudo ufw status numbered
+
+# Enable firewall
+sudo ufw enable
+
+# Disable firewall (temporary testing)
+sudo ufw disable
+
+# Delete rule by number
+sudo ufw delete <number>
+
+# Add new rule
+sudo ufw allow 8080/tcp
+
+# Delete rule
+sudo ufw delete allow 8080/tcp
+
+# Reset all rules
+sudo ufw --force reset
+
+# Reload rules
+sudo ufw reload
+```
+
+{% elif firewall_type == 'iptables' %}
+```bash
+# List all rules
+sudo iptables -L -n -v
+
+# List with line numbers
+sudo iptables -L --line-numbers
+
+# Save rules
+sudo iptables-save > /etc/iptables/rules.v4
+
+# Restore rules
+sudo iptables-restore < /etc/iptables/rules.v4
+
+# Flush all rules (DANGEROUS)
+sudo iptables -F
+
+# Add rule
+sudo iptables -A INPUT -p tcp --dport 8080 -j ACCEPT
+
+# Delete rule by number
+sudo iptables -D INPUT <number>
+
+# Insert rule at position
+sudo iptables -I INPUT 1 -p tcp --dport 8080 -j ACCEPT
+```
+
+{% elif firewall_type == 'nftables' %}
+```bash
+# Show all rules
+sudo nft list ruleset
+
+# Show specific table
+sudo nft list table ip filter
+
+# Apply rules from file
+sudo nft -f firewall-rules.txt
+
+# Flush all rules
+sudo nft flush ruleset
+
+# Add rule
+sudo nft add rule ip filter input tcp dport 8080 accept
+
+# Delete rule
+sudo nft delete rule ip filter input handle <handle_number>
+
+# Save rules
+sudo nft list ruleset > /etc/nftables.conf
+
+# Reload rules
+sudo systemctl reload nftables
+```
+{% endif %}
+
+## Monitoring
+
+{% if enable_logging %}
+### View Firewall Logs
+
+```bash
+# Follow logs in real-time
+sudo bash scripts/monitor-firewall.sh --follow
+
+# Show last 100 lines
+sudo bash scripts/monitor-firewall.sh --lines 100
+
+# Show statistics
+sudo bash scripts/monitor-firewall.sh --stats
+
+# Show top blocked IPs
+sudo bash scripts/monitor-firewall.sh --top
+```
+
+### Log Locations
+
+{% if firewall_type == 'ufw' %}
+- UFW logs: `/var/log/ufw.log`
+- System logs: `journalctl -u ufw`
+
+{% elif firewall_type == 'iptables' %}
+- Kernel logs: `journalctl -k | grep IPTables`
+- System logs: `/var/log/kern.log`
+
+{% elif firewall_type == 'nftables' %}
+- Kernel logs: `journalctl -k | grep nftables`
+- System logs: `/var/log/kern.log`
+{% endif %}
+{% endif %}
+
+### Check Active Connections
+
+```bash
+# Show all connections
+sudo ss -tunap
+
+# Show listening ports
+sudo ss -tunlp
+
+# Show specific port
+sudo ss -tunap | grep {{ ssh_port }}
+
+# Count connections per IP
+sudo netstat -ntu | awk '{print $5}' | cut -d: -f1 | sort | uniq -c | sort -n
+```
+
+## Common Tasks
+
+### Add New Port
+
+{% if firewall_type == 'ufw' %}
+```bash
+# Allow TCP port
+sudo ufw allow 8080/tcp
+
+# Allow UDP port
+sudo ufw allow 53/udp
+
+# Allow from specific IP
+sudo ufw allow from 192.168.1.100 to any port 3306
+
+# Allow port range
+sudo ufw allow 6000:6010/tcp
+```
+
+{% elif firewall_type == 'iptables' %}
+```bash
+# Allow TCP port
+sudo iptables -A INPUT -p tcp --dport 8080 -m conntrack --ctstate NEW -j ACCEPT
+
+# Allow UDP port
+sudo iptables -A INPUT -p udp --dport 53 -j ACCEPT
+
+# Allow from specific IP
+sudo iptables -A INPUT -s 192.168.1.100 -p tcp --dport 3306 -j ACCEPT
+
+# Save rules
+sudo iptables-save > /etc/iptables/rules.v4
+```
+
+{% elif firewall_type == 'nftables' %}
+```bash
+# Allow TCP port
+sudo nft add rule ip filter input tcp dport 8080 ct state new accept
+
+# Allow UDP port
+sudo nft add rule ip filter input udp dport 53 accept
+
+# Allow from specific IP
+sudo nft add rule ip filter input ip saddr 192.168.1.100 tcp dport 3306 accept
+
+# Save rules
+sudo nft list ruleset > /etc/nftables.conf
+```
+{% endif %}
+
+### Block Specific IP
+
+{% if firewall_type == 'ufw' %}
+```bash
+sudo ufw deny from 1.2.3.4
+sudo ufw insert 1 deny from 1.2.3.4
+```
+
+{% elif firewall_type == 'iptables' %}
+```bash
+sudo iptables -I INPUT -s 1.2.3.4 -j DROP
+sudo iptables-save > /etc/iptables/rules.v4
+```
+
+{% elif firewall_type == 'nftables' %}
+```bash
+sudo nft add rule ip filter input ip saddr 1.2.3.4 drop
+sudo nft list ruleset > /etc/nftables.conf
+```
+{% endif %}
+
+### Temporarily Disable Firewall
+
+{% if firewall_type == 'ufw' %}
+```bash
+# Disable (but keep rules)
+sudo ufw disable
+
+# Re-enable
+sudo ufw enable
+```
+
+{% elif firewall_type == 'iptables' %}
+```bash
+# Set all policies to ACCEPT
+sudo iptables -P INPUT ACCEPT
+sudo iptables -P FORWARD ACCEPT
+sudo iptables -P OUTPUT ACCEPT
+
+# Flush all rules
+sudo iptables -F
+
+# To restore: reapply rules
+sudo iptables-restore < /etc/iptables/rules.v4
+```
+
+{% elif firewall_type == 'nftables' %}
+```bash
+# Flush all rules
+sudo nft flush ruleset
+
+# To restore: reapply rules
+sudo nft -f /etc/nftables.conf
+```
+{% endif %}
+
+## Troubleshooting
+
+### Locked Out of SSH
+
+**Access via console and:**
+
+```bash
+{% if firewall_type == 'ufw' %}
+# Temporarily disable firewall
+sudo ufw disable
+
+# Or allow SSH
+sudo ufw allow {{ ssh_port }}/tcp
+sudo ufw enable
+
+{% elif firewall_type == 'iptables' %}
+# Allow SSH immediately
+sudo iptables -I INPUT 1 -p tcp --dport {{ ssh_port }} -j ACCEPT
+sudo iptables-save > /etc/iptables/rules.v4
+
+{% elif firewall_type == 'nftables' %}
+# Allow SSH immediately
+sudo nft add rule ip filter input tcp dport {{ ssh_port }} accept
+sudo nft list ruleset > /etc/nftables.conf
+{% endif %}
+```
+
+### Connection Refused
+
+```bash
+# Check if service is listening
+sudo ss -tunlp | grep <port>
+
+# Check firewall allows port
+{% if firewall_type == 'ufw' %}
+sudo ufw status | grep <port>
+{% elif firewall_type == 'iptables' %}
+sudo iptables -L -n | grep <port>
+{% elif firewall_type == 'nftables' %}
+sudo nft list ruleset | grep <port>
+{% endif %}
+
+# Test from localhost
+telnet localhost <port>
+
+# Check logs for blocks
+{% if enable_logging %}
+sudo bash scripts/monitor-firewall.sh --lines 50
+{% endif %}
+```
+
+### High CPU Usage
+
+```bash
+# Check connection count
+sudo ss -s
+
+# Check for SYN flood
+sudo netstat -an | grep SYN_RECV | wc -l
+
+{% if syn_flood_protection and configuration_mode == 'advanced' %}
+# SYN flood protection is enabled in rules
+{% else %}
+# Consider enabling SYN flood protection
+{% endif %}
+
+# Check for port scans
+{% if enable_logging %}
+sudo bash scripts/monitor-firewall.sh --stats
+{% endif %}
+```
+
+### Rules Not Persisting
+
+{% if firewall_type == 'ufw' %}
+```bash
+# UFW rules should persist automatically
+# Check UFW is enabled
+sudo systemctl status ufw
+
+# Enable UFW service
+sudo systemctl enable ufw
+```
+
+{% elif firewall_type == 'iptables' %}
+```bash
+# Install persistence package
+sudo apt-get install iptables-persistent
+
+# Save current rules
+sudo netfilter-persistent save
+
+# Or manually
+sudo iptables-save > /etc/iptables/rules.v4
+sudo ip6tables-save > /etc/iptables/rules.v6
+```
+
+{% elif firewall_type == 'nftables' %}
+```bash
+# Save rules
+sudo nft list ruleset > /etc/nftables.conf
+
+# Enable nftables service
+sudo systemctl enable nftables
+
+# Check service status
+sudo systemctl status nftables
+```
+{% endif %}
+
+## Security Best Practices
+
+### Implemented Features
+
+{% if configuration_mode == 'advanced' %}
+✅ **Active Security Features:**
+{% if allow_established %}
+- Stateful connection tracking
+{% endif %}
+{% if block_invalid %}
+- Invalid packet filtering
+{% endif %}
+{% if syn_flood_protection %}
+- SYN flood protection
+{% endif %}
+{% if port_scan_protection %}
+- Port scan detection
+{% endif %}
+{% if rate_limiting %}
+- Connection rate limiting ({{ rate_limit_connections }}/min)
+{% endif %}
+{% if ssh_rate_limit %}
+- SSH brute force protection
+{% endif %}
+{% if enable_logging %}
+- Security logging ({{ log_level }})
+{% endif %}
+{% if trusted_networks %}
+- Trusted network zones
+{% endif %}
+{% if blocked_ips %}
+- IP blacklist
+{% endif %}
+{% endif %}
+
+### Recommended Additional Steps
+
+1. **Install Fail2ban**
+   ```bash
+   sudo apt-get install fail2ban
+   {% if enable_fail2ban_integration and configuration_mode == 'advanced' %}
+   sudo cp fail2ban/jail.local /etc/fail2ban/
+   sudo systemctl restart fail2ban
+   {% endif %}
+   ```
+
+2. **Regular Audits**
+   ```bash
+   # Review rules weekly
+   {% if firewall_type == 'ufw' %}
+   sudo ufw status numbered
+   {% elif firewall_type == 'iptables' %}
+   sudo iptables -L -n -v
+   {% elif firewall_type == 'nftables' %}
+   sudo nft list ruleset
+   {% endif %}
+   
+   # Check logs for anomalies
+   {% if enable_logging %}
+   sudo bash scripts/monitor-firewall.sh --stats
+   {% endif %}
+   ```
+
+3. **Monitor Blocked Attempts**
+   ```bash
+   # Set up alerts for repeated blocks
+   {% if enable_logging %}
+   sudo bash scripts/monitor-firewall.sh --top
+   {% endif %}
+   ```
+
+4. **Keep Software Updated**
+   ```bash
+   sudo apt-get update
+   sudo apt-get upgrade
+   ```
+
+5. **Test Regularly**
+   ```bash
+   # Port scan from external host
+   nmap -sS your-server-ip
+   
+   # Check for open ports
+   sudo ss -tunlp
+   ```
+
+### Hardening Checklist
+
+- [ ] SSH on non-standard port (current: {{ ssh_port }})
+- [ ] SSH key authentication only (disable passwords)
+- [ ] Rate limiting enabled
+- [ ] Fail2ban installed and configured
+- [ ] Logging enabled and monitored
+- [ ] Regular rule audits scheduled
+- [ ] Backup access method available
+- [ ] Incident response plan documented
+- [ ] Only required ports open
+- [ ] Unused services disabled
+
+## Advanced Configuration
+
+{% if configuration_mode == 'advanced' %}
+
+### Port Knocking
+
+Implement port knocking for additional SSH security:
+
+{% if firewall_type == 'iptables' %}
+```bash
+# Install knockd
+sudo apt-get install knockd
+
+# Configure /etc/knockd.conf
+# Then close SSH port and use knock sequence
+```
+{% endif %}
+
+### GeoIP Blocking
+
+Block traffic from specific countries:
+
+```bash
+# Install geoip packages
+sudo apt-get install xtables-addons-common libtext-csv-xs-perl
+
+# Download GeoIP database
+sudo /usr/lib/xtables-addons/xt_geoip_dl
+sudo /usr/lib/xtables-addons/xt_geoip_build -D /usr/share/xt_geoip
+
+{% if firewall_type == 'iptables' %}
+# Block country (e.g., CN)
+sudo iptables -A INPUT -m geoip --src-cc CN -j DROP
+{% endif %}
+```
+
+### DDoS Protection
+
+Additional DDoS mitigation:
+
+{% if firewall_type == 'iptables' %}
+```bash
+# Limit connections per IP
+sudo iptables -A INPUT -p tcp --syn -m connlimit --connlimit-above 20 -j DROP
+
+# Limit new connections rate
+sudo iptables -A INPUT -p tcp --syn -m recent --name synflood --set
+sudo iptables -A INPUT -p tcp --syn -m recent --name synflood --update --seconds 1 --hitcount 20 -j DROP
+```
+{% endif %}
+
+{% endif %}
+
+## Backup and Restore
+
+### Create Backup
+
+```bash
+# Backup current rules
+sudo bash scripts/backup-rules.sh
+
+# Backups stored in: ./firewall-backups/
+```
+
+### Restore from Backup
+
+```bash
+# List backups
+ls -lh ./firewall-backups/
+
+# Restore specific backup
+sudo bash scripts/backup-rules.sh restore
+```
+
+### Automated Backups
+
+Add to crontab for daily backups:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add line (backup at 2 AM daily)
+0 2 * * * /path/to/scripts/backup-rules.sh
+```
+
+## Integration with Other Tools
+
+### Docker
+
+{% if docker_integration and configuration_mode == 'advanced' %}
+Docker integration is configured for network: {{ docker_network }}
+
+{% else %}
+If using Docker, ensure firewall rules allow Docker bridge:
+
+{% if firewall_type == 'ufw' %}
+```bash
+# Allow Docker bridge network
+sudo ufw allow from 172.17.0.0/16
+```
+{% endif %}
+{% endif %}
+
+### Kubernetes
+
+```bash
+# Allow Kubernetes ports
+{% if firewall_type == 'ufw' %}
+sudo ufw allow 6443/tcp  # API server
+sudo ufw allow 10250/tcp # Kubelet
+sudo ufw allow 30000:32767/tcp # NodePort services
+{% endif %}
+```
+
+### Load Balancers
+
+```bash
+# Allow health checks from load balancer
+{% if firewall_type == 'ufw' %}
+sudo ufw allow from <lb-ip> to any port 80
+sudo ufw allow from <lb-ip> to any port 443
+{% endif %}
+```
+
+## Files Generated
+
+- `firewall-rules.txt` - Firewall rules configuration
+- `scripts/apply-firewall.sh` - Apply rules script
+- `scripts/backup-rules.sh` - Backup and restore script
+{% if configuration_mode == 'advanced' %}
+- `scripts/test-firewall.sh` - Automated testing script
+{% endif %}
+{% if enable_logging %}
+- `scripts/monitor-firewall.sh` - Log monitoring script
+{% endif %}
+{% if enable_fail2ban_integration and configuration_mode == 'advanced' %}
+- `fail2ban/jail.local` - Fail2ban configuration
+{% endif %}
+- `README.md` - This documentation
+
+## Additional Resources
+
+- [UFW Documentation](https://help.ubuntu.com/community/UFW)
+- [iptables Tutorial](https://www.netfilter.org/documentation/)
+- [nftables Wiki](https://wiki.nftables.org/)
+- [Fail2ban](https://www.fail2ban.org/)
+- [Linux Security](https://www.linux.com/training-tutorials/linux-security-fundamentals/)
+
+## Support and Troubleshooting
+
+If you encounter issues:
+
+1. **Check logs** for blocked connections
+2. **Verify rules** are correctly applied
+3. **Test from different IPs** to isolate issues
+4. **Review security logs** for patterns
+5. **Keep backup access** method ready
+
+### Common Error Messages
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| Connection refused | Port not allowed | Add port to firewall rules |
+| Connection timeout | Default policy DROP | Check default policy settings |
+| Permission denied | Not running as root | Use sudo |
+| Rules not persisting | Persistence not enabled | Configure persistence method |
+
+---
+
+**Generated by OpsArtisan** | ⚠️  **Always test firewall changes in safe environment first!**
