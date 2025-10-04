@@ -1,5 +1,0 @@
-#!/bin/bash
-set -e
-useradd -m -s /bin/bash {{ username }}
-usermod -aG sudo {{ username }}
-echo "User {{ username }} created with sudo privileges."

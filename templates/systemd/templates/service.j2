@@ -1,0 +1,96 @@
+[Unit]
+Description={{ description }}
+Documentation=man:systemd.service(5)
+{% if requires_network %}
+After=network-online.target
+Wants=network-online.target
+{% else %}
+After=network.target
+{% endif %}
+{% if after_services and configuration_mode == 'advanced' %}
+{% for service in after_services.split(',') %}
+After={{ service.strip() }}
+{% endfor %}
+{% endif %}
+{% if enable_socket_activation and configuration_mode == 'advanced' %}
+Requires={{ service_name }}.socket
+{% endif %}
+
+[Service]
+Type={{ service_type }}
+User={{ run_as_user }}
+{% if configuration_mode == 'advanced' and run_as_group %}
+Group={{ run_as_group }}
+{% endif %}
+WorkingDirectory={{ working_directory }}
+
+# Execution
+ExecStart={{ exec_start }}
+{% if exec_stop and configuration_mode == 'advanced' %}
+ExecStop={{ exec_stop }}
+{% endif %}
+{% if exec_reload and configuration_mode == 'advanced' %}
+ExecReload={{ exec_reload }}
+{% endif %}
+
+# Restart policy
+Restart={{ restart_policy }}
+{% if restart_policy != 'no' %}
+RestartSec={{ restart_sec }}
+{% if configuration_mode == 'advanced' %}
+StartLimitBurst={{ start_limit_burst }}
+StartLimitIntervalSec={{ start_limit_interval }}
+{% endif %}
+{% endif %}
+
+{% if environment_vars and configuration_mode == 'advanced' %}
+# Environment variables
+{% for env in environment_vars.split(',') %}
+Environment="{{ env.strip() }}"
+{% endfor %}
+{% endif %}
+{% if environment_file and configuration_mode == 'advanced' %}
+EnvironmentFile={{ environment_file }}
+{% endif %}
+
+{% if enable_logging %}
+# Logging
+StandardOutput=journal
+StandardError=journal
+{% if configuration_mode == 'advanced' %}
+SyslogIdentifier={{ syslog_identifier }}
+SyslogLevel={{ log_level }}
+{% endif %}
+{% endif %}
+
+{% if enable_security and configuration_mode == 'advanced' %}
+# Security hardening
+NoNewPrivileges={{ 'yes' if no_new_privileges else 'no' }}
+PrivateTmp={{ 'yes' if private_tmp else 'no' }}
+ProtectSystem={{ protect_system }}
+ProtectHome={{ 'yes' if protect_home else 'no' }}
+{% if restrict_namespaces %}
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+{% endif %}
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+{% endif %}
+
+{% if resource_limits and configuration_mode == 'advanced' %}
+# Resource limits
+CPUQuota={{ cpu_quota }}%
+MemoryLimit={{ memory_limit }}
+TasksMax={{ tasks_max }}
+{% endif %}
+
+# Process properties
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy={{ wanted_by }}

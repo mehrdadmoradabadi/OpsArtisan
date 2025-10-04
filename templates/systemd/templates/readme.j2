@@ -1,0 +1,487 @@
+# Systemd Service: {{ service_name }}
+
+{% if configuration_mode == 'simple' %}
+Simple systemd service configuration.
+{% else %}
+Advanced systemd service with security hardening and resource limits.
+{% endif %}
+
+## Service Details
+
+- **Service Name:** {{ service_name }}
+- **Description:** {{ description }}
+- **Type:** {{ service_type }}
+- **User:** {{ run_as_user }}
+{% if configuration_mode == 'advanced' and run_as_group %}
+- **Group:** {{ run_as_group }}
+{% endif %}
+- **Working Directory:** {{ working_directory }}
+- **Restart Policy:** {{ restart_policy }}{% if restart_policy != 'no' %} (delay: {{ restart_sec }}s){% endif %}
+{% if requires_network %}
+- **Requires:** Network connectivity
+{% endif %}
+{% if enable_security and configuration_mode == 'advanced' %}
+- **Security:** Hardening enabled
+{% endif %}
+{% if resource_limits and configuration_mode == 'advanced' %}
+- **Resource Limits:** CPU {{ cpu_quota }}%, Memory {{ memory_limit }}, Tasks {{ tasks_max }}
+{% endif %}
+{% if create_timer and configuration_mode == 'advanced' %}
+- **Timer Schedule:** {{ timer_schedule }}
+{% endif %}
+{% if enable_socket_activation and configuration_mode == 'advanced' %}
+- **Socket Activation:** Port {{ socket_port }} ({{ socket_protocol }})
+{% endif %}
+
+## Quick Start
+
+### Installation
+
+```bash
+# Review service configuration
+cat {{ service_name }}.service
+
+# Install the service
+sudo bash scripts/install.sh
+```
+
+### Basic Management
+
+```bash
+# Start service
+sudo systemctl start {{ service_name }}
+
+# Stop service
+sudo systemctl stop {{ service_name }}
+
+# Restart service
+sudo systemctl restart {{ service_name }}
+
+# Check status
+sudo systemctl status {{ service_name }}
+
+# Enable on boot
+sudo systemctl enable {{ service_name }}
+
+# Disable from boot
+sudo systemctl disable {{ service_name }}
+```
+
+### Using Management Script
+
+```bash
+# Show status
+bash scripts/manage.sh status
+
+# Start service
+sudo bash scripts/manage.sh start
+
+# Enable and start
+sudo bash scripts/manage.sh enable
+sudo bash scripts/manage.sh start
+
+# View logs
+bash scripts/manage.sh logs
+```
+
+## Command Reference
+
+### Start Command
+
+```
+{{ exec_start }}
+```
+
+{% if exec_stop and configuration_mode == 'advanced' %}
+### Stop Command
+
+```
+{{ exec_stop }}
+```
+{% endif %}
+
+{% if exec_reload and configuration_mode == 'advanced' %}
+### Reload Command
+
+```
+{{ exec_reload }}
+```
+{% endif %}
+
+{% if environment_vars and configuration_mode == 'advanced' %}
+## Environment Variables
+
+{% for env in environment_vars.split(',') %}
+- `{{ env.strip().split('=')[0] }}={{ env.strip().split('=')[1] if '=' in env else '' }}`
+{% endfor %}
+
+{% if environment_file %}
+Environment file: `{{ environment_file }}`
+
+Edit the environment file:
+```bash
+sudo nano {{ environment_file }}
+sudo systemctl restart {{ service_name }}
+```
+{% endif %}
+{% endif %}
+
+## Logging
+
+### View Live Logs
+
+```bash
+# Follow logs
+sudo journalctl -u {{ service_name }} -f
+
+# Last 50 lines
+sudo journalctl -u {{ service_name }} -n 50
+
+# Since 1 hour ago
+sudo journalctl -u {{ service_name }} --since "1 hour ago"
+
+# Only errors
+sudo journalctl -u {{ service_name }} -p err
+```
+
+{% if enable_logging %}
+### Using Log Script
+
+```bash
+# Follow logs
+bash scripts/logs.sh -f
+
+# Last 100 lines
+bash scripts/logs.sh -n 100
+
+# Errors only
+bash scripts/logs.sh -p err
+
+# Filter by keyword
+bash scripts/logs.sh -g "error"
+
+# Since specific time
+bash scripts/logs.sh --since "2023-01-01 10:00"
+```
+{% endif %}
+
+## Monitoring
+
+### Check Service Health
+
+```bash
+# Status
+systemctl status {{ service_name }}
+
+# Is running?
+systemctl is-active {{ service_name }}
+
+# Is enabled?
+systemctl is-enabled {{ service_name }}
+
+# Failed?
+systemctl is-failed {{ service_name }}
+```
+
+{% if configuration_mode == 'advanced' %}
+### Health Check Script
+
+```bash
+# Run health check
+bash scripts/healthcheck.sh
+```
+
+The health check monitors:
+- Service running status
+- Failed state
+- Restart count
+{% if resource_limits %}
+- Memory usage
+{% endif %}
+- Recent errors in logs
+{% endif %}
+
+### Resource Usage
+
+```bash
+# Show resource usage
+systemctl show {{ service_name }} | grep -E '(Memory|CPU|Tasks)'
+
+# Detailed status
+systemd-cgtop -1 | grep {{ service_name }}
+```
+
+{% if create_timer and configuration_mode == 'advanced' %}
+## Timer Management
+
+This service uses a systemd timer for scheduled execution.
+
+### Timer Commands
+
+```bash
+# Enable timer
+sudo systemctl enable {{ service_name }}.timer
+
+# Start timer
+sudo systemctl start {{ service_name }}.timer
+
+# Check timer status
+sudo systemctl status {{ service_name }}.timer
+
+# List all timers
+systemctl list-timers
+
+# Show next run time
+systemctl list-timers {{ service_name }}.timer
+```
+
+### Trigger Manual Run
+
+```bash
+# Run service immediately (without timer)
+sudo systemctl start {{ service_name }}
+```
+
+### Timer Schedule
+
+- **Schedule:** {{ timer_schedule }}
+{% if timer_persistent %}
+- **Persistent:** Yes (runs missed executions on startup)
+{% endif %}
+
+{% endif %}
+
+{% if enable_socket_activation and configuration_mode == 'advanced' %}
+## Socket Activation
+
+This service uses socket activation (starts on-demand).
+
+### Socket Commands
+
+```bash
+# Enable socket
+sudo systemctl enable {{ service_name }}.socket
+
+# Start socket
+sudo systemctl start {{ service_name }}.socket
+
+# Check socket status
+sudo systemctl status {{ service_name }}.socket
+
+# List sockets
+systemctl list-sockets | grep {{ service_name }}
+```
+
+### Test Socket
+
+```bash
+# Test connection (triggers service start)
+{% if socket_protocol == 'tcp' %}
+telnet localhost {{ socket_port }}
+# or
+curl http://localhost:{{ socket_port }}
+{% else %}
+nc -u localhost {{ socket_port }}
+{% endif %}
+
+# Check if service started
+systemctl status {{ service_name }}
+```
+
+{% endif %}
+
+## Troubleshooting
+
+### Service Won't Start
+
+```bash
+# Check detailed status
+systemctl status {{ service_name }} -l
+
+# View recent logs
+journalctl -u {{ service_name }} -n 50
+
+# Check for errors
+journalctl -u {{ service_name }} -p err
+
+# Validate service file
+systemd-analyze verify /etc/systemd/system/{{ service_name }}.service
+
+# Test command manually
+sudo -u {{ run_as_user }} {{ exec_start }}
+```
+
+### Service Keeps Restarting
+
+```bash
+# Check restart count
+systemctl show {{ service_name }} | grep NRestarts
+
+# View crash logs
+journalctl -u {{ service_name }} | grep -i "failed\|error\|crash"
+
+# Disable restart temporarily
+sudo systemctl set-property {{ service_name }} Restart=no
+sudo systemctl daemon-reload
+```
+
+### Permission Issues
+
+```bash
+# Check file permissions
+ls -la {{ working_directory }}
+
+# Check user exists
+id {{ run_as_user }}
+
+# Fix ownership
+sudo chown -R {{ run_as_user }}:{% if configuration_mode == 'advanced' and run_as_group %}{{ run_as_group }}{% else %}{{ run_as_user }}{% endif %} {{ working_directory }}
+```
+
+### High Resource Usage
+
+{% if resource_limits and configuration_mode == 'advanced' %}
+```bash
+# Check current limits
+systemctl show {{ service_name }} | grep -E '(CPU|Memory|Tasks)'
+
+# Adjust limits (temporary)
+sudo systemctl set-property {{ service_name }} MemoryLimit=2G
+sudo systemctl set-property {{ service_name }} CPUQuota=100%
+
+# Make permanent: edit {{ service_name }}.service and reload
+sudo systemctl daemon-reload
+sudo systemctl restart {{ service_name }}
+```
+{% else %}
+Consider enabling resource limits in advanced mode.
+{% endif %}
+
+## Maintenance
+
+### Update Service Configuration
+
+```bash
+# 1. Edit service file
+sudo nano /etc/systemd/system/{{ service_name }}.service
+
+# 2. Reload systemd
+sudo systemctl daemon-reload
+
+# 3. Restart service
+sudo systemctl restart {{ service_name }}
+
+# 4. Verify
+systemctl status {{ service_name }}
+```
+
+### Backup Service Configuration
+
+```bash
+# Backup
+sudo cp /etc/systemd/system/{{ service_name }}.service \
+       /etc/systemd/system/{{ service_name }}.service.backup
+
+# Restore
+sudo cp /etc/systemd/system/{{ service_name }}.service.backup \
+       /etc/systemd/system/{{ service_name }}.service
+sudo systemctl daemon-reload
+sudo systemctl restart {{ service_name }}
+```
+
+### Remove Service
+
+```bash
+# Stop and disable
+sudo systemctl stop {{ service_name }}
+sudo systemctl disable {{ service_name }}
+
+# Remove files
+sudo rm /etc/systemd/system/{{ service_name }}.service
+{% if create_timer and configuration_mode == 'advanced' %}
+sudo rm /etc/systemd/system/{{ service_name }}.timer
+{% endif %}
+{% if enable_socket_activation and configuration_mode == 'advanced' %}
+sudo rm /etc/systemd/system/{{ service_name }}.socket
+{% endif %}
+
+# Reload systemd
+sudo systemctl daemon-reload
+sudo systemctl reset-failed
+```
+
+## Security Notes
+
+{% if enable_security and configuration_mode == 'advanced' %}
+### Security Hardening Enabled
+
+✅ Security features active:
+{% if no_new_privileges %}
+- No new privileges (prevents privilege escalation)
+{% endif %}
+{% if private_tmp %}
+- Private /tmp directory
+{% endif %}
+- System protection: {{ protect_system }}
+{% if protect_home %}
+- Home directory protection
+{% endif %}
+{% if restrict_namespaces %}
+- Namespace restrictions
+- Realtime restrictions
+- SUID/SGID restrictions
+{% endif %}
+- Private devices
+- Kernel tunables protection
+- Kernel modules protection
+- Control groups protection
+
+{% endif %}
+
+### Best Practices
+
+- ✅ Service runs as non-root user ({{ run_as_user }})
+- ✅ Automatic restart on failure
+{% if enable_security and configuration_mode == 'advanced' %}
+- ✅ Security hardening enabled
+{% else %}
+- ⚠️ Consider enabling security hardening for production
+{% endif %}
+{% if resource_limits and configuration_mode == 'advanced' %}
+- ✅ Resource limits configured
+{% else %}
+- ⚠️ Consider setting resource limits to prevent resource exhaustion
+{% endif %}
+{% if enable_logging %}
+- ✅ Logging configured
+{% endif %}
+
+## Files Generated
+
+- `{{ service_name }}.service` - Systemd service unit file
+{% if create_timer and configuration_mode == 'advanced' %}
+- `{{ service_name }}.timer` - Systemd timer unit file
+{% endif %}
+{% if enable_socket_activation and configuration_mode == 'advanced' %}
+- `{{ service_name }}.socket` - Systemd socket unit file
+{% endif %}
+- `scripts/install.sh` - Installation script
+- `scripts/manage.sh` - Management script
+{% if enable_logging %}
+- `scripts/logs.sh` - Advanced log viewer
+{% endif %}
+{% if configuration_mode == 'advanced' %}
+- `scripts/healthcheck.sh` - Health check script
+{% endif %}
+- `README.md` - This documentation
+
+## Additional Resources
+
+- [Systemd Service Documentation](https://www.freedesktop.org/software/systemd/man/systemd.service.html)
+- [Systemd Exec Documentation](https://www.freedesktop.org/software/systemd/man/systemd.exec.html)
+- [Systemd Timer Documentation](https://www.freedesktop.org/software/systemd/man/systemd.timer.html)
+- [Security Hardening Guide](https://www.freedesktop.org/software/systemd/man/systemd.exec.html#Sandboxing)
+
+---
+
+**Generated by OpsArtisan**TIMER_NAME}" **

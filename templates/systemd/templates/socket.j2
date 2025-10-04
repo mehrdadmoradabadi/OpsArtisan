@@ -1,0 +1,17 @@
+{% if enable_socket_activation and configuration_mode == 'advanced' %}
+[Unit]
+Description={{ description }} Socket
+Documentation=man:systemd.socket(5)
+
+[Socket]
+{% if socket_protocol == 'tcp' %}
+ListenStream={{ socket_port }}
+{% else %}
+ListenDatagram={{ socket_port }}
+{% endif %}
+Accept=no
+BindIPv6Only=both
+
+[Install]
+WantedBy=sockets.target
+{% endif %}

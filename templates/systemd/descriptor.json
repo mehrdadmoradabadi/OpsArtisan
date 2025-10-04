@@ -1,11 +1,511 @@
 {
-  "id": "user-setup",
-  "title": "User Account & Sudo Setup",
-  "description": "Create a new user with sudo privileges.",
-  "prompts": [
-    {"id": "username", "type": "string", "label": "New username", "default": "deploy"}
+  "id": "systemd",
+  "title": "Systemd Service Generator",
+  "description": "Generate systemd service units for applications, daemons, timers, and background services with best practices",
+  "category": "System Administration",
+  "tags": ["systemd", "service", "daemon", "linux", "init", "timer"],
+  "version": "2.0.0",
+
+  "dependencies": [],
+
+  "required_tools": [
+    "systemctl"
   ],
+
+  "optional_tools": [
+    "journalctl"
+  ],
+
+  "environment_defaults": {
+    "dev": {
+      "configuration_mode": "simple",
+      "service_type": "simple",
+      "restart_policy": "on-failure",
+      "enable_logging": true,
+      "enable_security": false,
+      "auto_restart": true
+    },
+    "staging": {
+      "configuration_mode": "advanced",
+      "service_type": "simple",
+      "restart_policy": "always",
+      "enable_logging": true,
+      "enable_security": true,
+      "auto_restart": true,
+      "resource_limits": true
+    },
+    "prod": {
+      "configuration_mode": "advanced",
+      "service_type": "notify",
+      "restart_policy": "always",
+      "enable_logging": true,
+      "enable_security": true,
+      "enable_hardening": true,
+      "auto_restart": true,
+      "resource_limits": true,
+      "monitoring": true,
+      "restart_sec": 10
+    }
+  },
+
+  "prompts": [
+    {
+      "id": "configuration_mode",
+      "type": "choice",
+      "label": "Configuration mode",
+      "choices": ["simple", "advanced"],
+      "default": "simple",
+      "description": "Simple: Basic service | Advanced: Full security, limits, and monitoring"
+    },
+    {
+      "id": "service_name",
+      "type": "string",
+      "label": "Service name",
+      "default": "myapp",
+      "validation": "^[a-z][a-z0-9-]*$",
+      "description": "Service unit name (e.g., myapp, api-server, worker)"
+    },
+    {
+      "id": "description",
+      "type": "string",
+      "label": "Service description",
+      "default": "My Application Service",
+      "description": "Human-readable description of the service"
+    },
+    {
+      "id": "service_type",
+      "type": "choice",
+      "label": "Service type",
+      "choices": ["simple", "forking", "oneshot", "notify", "dbus"],
+      "default": "simple",
+      "description": "simple: Standard | forking: Daemon | oneshot: Task | notify: Ready notification | dbus: D-Bus"
+    },
+    {
+      "id": "exec_start",
+      "type": "string",
+      "label": "Start command",
+      "default": "/usr/bin/myapp --config /etc/myapp/config.yml",
+      "description": "Full path to executable with arguments"
+    },
+    {
+      "id": "exec_stop",
+      "type": "string",
+      "label": "Stop command (optional)",
+      "default": "",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Custom stop command (leave empty for default SIGTERM)"
+    },
+    {
+      "id": "exec_reload",
+      "type": "string",
+      "label": "Reload command (optional)",
+      "default": "",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Command to reload configuration without restart"
+    },
+    {
+      "id": "working_directory",
+      "type": "string",
+      "label": "Working directory",
+      "default": "/opt/myapp",
+      "description": "Directory where the service will run"
+    },
+    {
+      "id": "run_as_user",
+      "type": "string",
+      "label": "Run as user",
+      "default": "myapp",
+      "description": "User account to run the service (creates if doesn't exist)"
+    },
+    {
+      "id": "run_as_group",
+      "type": "string",
+      "label": "Run as group",
+      "default": "myapp",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Group to run the service"
+    },
+    {
+      "id": "restart_policy",
+      "type": "choice",
+      "label": "Restart policy",
+      "choices": ["no", "on-failure", "on-abnormal", "on-watchdog", "on-abort", "always"],
+      "default": "on-failure",
+      "description": "When to automatically restart the service"
+    },
+    {
+      "id": "restart_sec",
+      "type": "integer",
+      "label": "Restart delay (seconds)",
+      "default": 5,
+      "min": 0,
+      "max": 300,
+      "condition": "restart_policy != 'no'",
+      "description": "Time to wait before restarting"
+    },
+    {
+      "id": "start_limit_burst",
+      "type": "integer",
+      "label": "Max restart attempts",
+      "default": 5,
+      "min": 1,
+      "max": 100,
+      "condition": "configuration_mode == 'advanced' && restart_policy != 'no'",
+      "description": "Maximum restart attempts in interval"
+    },
+    {
+      "id": "start_limit_interval",
+      "type": "integer",
+      "label": "Restart interval (seconds)",
+      "default": 300,
+      "min": 10,
+      "max": 3600,
+      "condition": "configuration_mode == 'advanced' && restart_policy != 'no'",
+      "description": "Time window for restart attempts"
+    },
+    {
+      "id": "environment_vars",
+      "type": "string",
+      "label": "Environment variables",
+      "default": "NODE_ENV=production,PORT=3000",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Comma-separated KEY=VALUE pairs"
+    },
+    {
+      "id": "environment_file",
+      "type": "string",
+      "label": "Environment file path",
+      "default": "",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Path to file with environment variables (e.g., /etc/myapp/env)"
+    },
+    {
+      "id": "wanted_by",
+      "type": "choice",
+      "label": "Start on boot target",
+      "choices": ["multi-user.target", "graphical.target", "network-online.target"],
+      "default": "multi-user.target",
+      "description": "When to start the service during boot"
+    },
+    {
+      "id": "requires_network",
+      "type": "bool",
+      "label": "Requires network?",
+      "default": true,
+      "description": "Wait for network before starting"
+    },
+    {
+      "id": "after_services",
+      "type": "string",
+      "label": "Start after services",
+      "default": "",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Comma-separated service names (e.g., postgresql.service,redis.service)"
+    },
+    {
+      "id": "enable_security",
+      "type": "bool",
+      "label": "Enable security hardening?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Apply systemd security restrictions"
+    },
+    {
+      "id": "private_tmp",
+      "type": "bool",
+      "label": "Use private /tmp?",
+      "default": true,
+      "condition": "enable_security && configuration_mode == 'advanced'",
+      "description": "Isolate /tmp directory"
+    },
+    {
+      "id": "protect_system",
+      "type": "choice",
+      "label": "System protection level",
+      "choices": ["false", "true", "full", "strict"],
+      "default": "full",
+      "condition": "enable_security && configuration_mode == 'advanced'",
+      "description": "Protect system directories from writes"
+    },
+    {
+      "id": "protect_home",
+      "type": "bool",
+      "label": "Protect home directories?",
+      "default": true,
+      "condition": "enable_security && configuration_mode == 'advanced'",
+      "description": "Make home directories inaccessible"
+    },
+    {
+      "id": "no_new_privileges",
+      "type": "bool",
+      "label": "Disable privilege escalation?",
+      "default": true,
+      "condition": "enable_security && configuration_mode == 'advanced'",
+      "description": "Prevent process from gaining new privileges"
+    },
+    {
+      "id": "restrict_namespaces",
+      "type": "bool",
+      "label": "Restrict namespaces?",
+      "default": true,
+      "condition": "enable_security && configuration_mode == 'advanced'",
+      "description": "Limit namespace creation"
+    },
+    {
+      "id": "resource_limits",
+      "type": "bool",
+      "label": "Set resource limits?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Limit CPU, memory, and file resources"
+    },
+    {
+      "id": "cpu_quota",
+      "type": "integer",
+      "label": "CPU quota (%)",
+      "default": 80,
+      "min": 1,
+      "max": 800,
+      "condition": "resource_limits && configuration_mode == 'advanced'",
+      "description": "Maximum CPU usage (100% = 1 core)"
+    },
+    {
+      "id": "memory_limit",
+      "type": "string",
+      "label": "Memory limit",
+      "default": "1G",
+      "condition": "resource_limits && configuration_mode == 'advanced'",
+      "description": "Maximum memory (e.g., 512M, 2G)"
+    },
+    {
+      "id": "tasks_max",
+      "type": "integer",
+      "label": "Max tasks/threads",
+      "default": 4096,
+      "min": 1,
+      "max": 100000,
+      "condition": "resource_limits && configuration_mode == 'advanced'",
+      "description": "Maximum number of tasks"
+    },
+    {
+      "id": "enable_logging",
+      "type": "bool",
+      "label": "Configure logging?",
+      "default": true,
+      "description": "Setup systemd journal logging"
+    },
+    {
+      "id": "log_level",
+      "type": "choice",
+      "label": "Log level",
+      "choices": ["emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"],
+      "default": "info",
+      "condition": "enable_logging && configuration_mode == 'advanced'",
+      "description": "Minimum log level to capture"
+    },
+    {
+      "id": "syslog_identifier",
+      "type": "string",
+      "label": "Syslog identifier",
+      "default": "{{ service_name }}",
+      "condition": "enable_logging && configuration_mode == 'advanced'",
+      "description": "Identifier for journal logs"
+    },
+    {
+      "id": "create_timer",
+      "type": "bool",
+      "label": "Create timer unit?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Create systemd timer for scheduled execution"
+    },
+    {
+      "id": "timer_schedule",
+      "type": "string",
+      "label": "Timer schedule",
+      "default": "daily",
+      "condition": "create_timer && configuration_mode == 'advanced'",
+      "description": "When to run (e.g., daily, hourly, *:0/15 for every 15min)"
+    },
+    {
+      "id": "timer_persistent",
+      "type": "bool",
+      "label": "Persistent timer?",
+      "default": true,
+      "condition": "create_timer && configuration_mode == 'advanced'",
+      "description": "Run missed executions on startup"
+    },
+    {
+      "id": "enable_socket_activation",
+      "type": "bool",
+      "label": "Enable socket activation?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Start service on-demand via socket"
+    },
+    {
+      "id": "socket_port",
+      "type": "integer",
+      "label": "Socket port",
+      "default": 8080,
+      "min": 1,
+      "max": 65535,
+      "condition": "enable_socket_activation && configuration_mode == 'advanced'",
+      "description": "Port to listen on"
+    },
+    {
+      "id": "socket_protocol",
+      "type": "choice",
+      "label": "Socket protocol",
+      "choices": ["tcp", "udp"],
+      "default": "tcp",
+      "condition": "enable_socket_activation && configuration_mode == 'advanced'"
+    }
+  ],
+
   "outputs": [
-    {"path": "create-user.sh", "template": "create-user.j2"}
-  ]
+    {
+      "path": "{{ service_name }}.service",
+      "template": "service.j2"
+    },
+    {
+      "path": "{{ service_name }}.timer",
+      "template": "timer.j2",
+      "condition": "create_timer && configuration_mode == 'advanced'"
+    },
+    {
+      "path": "{{ service_name }}.socket",
+      "template": "socket.j2",
+      "condition": "enable_socket_activation && configuration_mode == 'advanced'"
+    },
+    {
+      "path": "scripts/install.sh",
+      "template": "install.j2"
+    },
+    {
+      "path": "scripts/manage.sh",
+      "template": "manage.j2"
+    },
+    {
+      "path": "scripts/logs.sh",
+      "template": "logs.j2",
+      "condition": "enable_logging"
+    },
+    {
+      "path": "scripts/healthcheck.sh",
+      "template": "healthcheck.j2",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "path": "README.md",
+      "template": "readme.j2"
+    }
+  ],
+
+  "validators": [
+    {
+      "command": "bash -n scripts/*.sh",
+      "description": "Validate script syntax",
+      "timeout": 10
+    },
+    {
+      "command": "systemd-analyze verify {{ service_name }}.service",
+      "description": "Validate service unit",
+      "timeout": 5,
+      "optional": true
+    }
+  ],
+
+  "tests": [
+    {
+      "command": "bash -n scripts/*.sh",
+      "description": "Validate all scripts",
+      "cleanup": null
+    }
+  ],
+
+  "hooks": {
+    "post_generation": [
+      {
+        "type": "shell",
+        "command": "chmod +x scripts/*.sh",
+        "description": "Make scripts executable",
+        "on_failure": "warn"
+      },
+      {
+        "type": "info",
+        "message": "Review service configuration before installation",
+        "on_failure": "ignore"
+      },
+      {
+        "type": "info",
+        "message": "Run as root: sudo bash scripts/install.sh",
+        "on_failure": "ignore"
+      }
+    ]
+  },
+
+  "next_steps": [
+    "Review {{ service_name }}.service configuration",
+    "Install: sudo bash scripts/install.sh",
+    "Start service: sudo systemctl start {{ service_name }}",
+    "Enable on boot: sudo systemctl enable {{ service_name }}",
+    "Check status: sudo systemctl status {{ service_name }}",
+    "View logs: sudo journalctl -u {{ service_name }} -f",
+    "Manage: bash scripts/manage.sh"
+  ],
+
+  "example_usage": "opsartisan new systemd --service-name myapp --exec-start '/usr/bin/node /opt/myapp/server.js'",
+
+  "documentation": {
+    "readme": "README.md",
+    "examples": [
+      {
+        "title": "Simple Node.js application",
+        "command": "opsartisan new systemd --service-name myapp --exec-start '/usr/bin/node /opt/myapp/app.js'",
+        "description": "Basic service for Node.js app"
+      },
+      {
+        "title": "Python API with security",
+        "command": "opsartisan new systemd --configuration-mode advanced --service-name api --exec-start '/usr/bin/python3 /opt/api/main.py' --enable-security --resource-limits",
+        "description": "Hardened Python service with resource limits"
+      },
+      {
+        "title": "Scheduled backup task",
+        "command": "opsartisan new systemd --configuration-mode advanced --service-name backup --service-type oneshot --create-timer --timer-schedule daily",
+        "description": "Daily backup service with timer"
+      },
+      {
+        "title": "Socket-activated service",
+        "command": "opsartisan new systemd --configuration-mode advanced --service-name web --enable-socket-activation --socket-port 8080",
+        "description": "On-demand service via socket"
+      }
+    ],
+    "links": [
+      {
+        "title": "Systemd Documentation",
+        "url": "https://www.freedesktop.org/software/systemd/man/"
+      },
+      {
+        "title": "Systemd for Administrators",
+        "url": "https://www.freedesktop.org/wiki/Software/systemd/"
+      },
+      {
+        "title": "Security Hardening",
+        "url": "https://www.freedesktop.org/software/systemd/man/systemd.exec.html"
+      }
+    ],
+    "best_practices": [
+      "Always run services as non-root users",
+      "Enable security hardening for production",
+      "Set resource limits to prevent resource exhaustion",
+      "Use Restart=always for critical services",
+      "Configure proper dependencies (After=, Requires=)",
+      "Use environment files for sensitive data",
+      "Enable logging for troubleshooting",
+      "Test services thoroughly before production",
+      "Monitor service status and logs regularly",
+      "Use timers instead of cron for scheduled tasks"
+    ]
+  }
 }

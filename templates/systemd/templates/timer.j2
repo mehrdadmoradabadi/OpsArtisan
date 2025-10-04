@@ -1,0 +1,23 @@
+{% if create_timer and configuration_mode == 'advanced' %}
+[Unit]
+Description={{ description }} Timer
+Documentation=man:systemd.timer(5)
+
+[Timer]
+{% if timer_schedule == 'daily' %}
+OnCalendar=daily
+{% elif timer_schedule == 'hourly' %}
+OnCalendar=hourly
+{% elif timer_schedule == 'weekly' %}
+OnCalendar=weekly
+{% else %}
+OnCalendar={{ timer_schedule }}
+{% endif %}
+{% if timer_persistent %}
+Persistent=true
+{% endif %}
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
+{% endif %}
