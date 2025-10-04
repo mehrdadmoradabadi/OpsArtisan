@@ -1,0 +1,378 @@
+# SSL/TLS Certificate: {{ common_name }}
+
+{% if configuration_mode == 'simple' %}
+Simple certificate configuration for development/testing.
+{% else %}
+Advanced certificate configuration with full customization.
+{% endif %}
+
+## Certificate Details
+
+- **Common Name (CN):** {{ common_name }}
+- **Type:** {% if cert_type == 'selfsigned' %}Self-Signed{% elif cert_type == 'csr' %}Certificate Signing Request{% else %}Certificate Authority{% endif %}
+{% if configuration_mode == 'advanced' %}
+- **Organization:** {{ organization }}
+- **Organizational Unit:** {{ organizational_unit }}
+- **Location:** {{ locality }}, {{ state }}, {{ country }}
+- **Email:** {{ email }}
+{% else %}
+- **Organization:** {{ organization }}
+- **Country:** {{ country }}
+{% endif %}
+- **Key Algorithm:** {% if key_algorithm == 'ec' and configuration_mode == 'advanced' %}EC ({{ ec_curve }}){% else %}RSA ({{ key_size }} bits){% endif %}
+{% if configuration_mode == 'advanced' %}
+- **Hash Algorithm:** {{ hash_algorithm }}
+{% endif %}
+{% if cert_type != 'csr' %}
+- **Validity:** {{ days_valid }} days
+{% endif %}
+{% if include_san %}
+- **Subject Alternative Names:** {{ san_domains }}{% if san_ips and configuration_mode == 'advanced' %}, {{ san_ips }}{% endif %}
+{% endif %}
+{% if key_encryption and configuration_mode == 'advanced' %}
+- **Key Encryption:** Enabled (passphrase protected)
+{% endif %}
+
+## Quick Start
+
+### Generate Certificate
+
+```bash
+bash scripts/generate-cert.sh
+```
+
+{% if cert_type == 'csr' %}
+This will create:
+- `{{ common_name }}.key` - Private key (keep secure!)
+- `{{ common_name }}.csr` - Certificate Signing Request
+
+### Submit CSR to Certificate Authority
+
+1. Send `{{ common_name }}.csr` to your CA
+2. Complete CA's verification process
+3. Receive signed certificate
+4. Save as `{{ common_name }}.crt`
+
+{% elif cert_type == 'ca' %}
+This will create:
+- `{{ common_name }}.key` - CA private key (keep extremely secure!)
+- `{{ common_name }}.crt` - CA certificate
+
+### Using Your CA
+
+To sign a server certificate:
+
+```bash
+# Generate server key
+openssl genrsa -out server.key 2048
+
+# Create server CSR
+openssl req -new -key server.key -out server.csr -subj "/CN=server.example.com"
+
+# Sign with your CA
+openssl x509 -req -in server.csr -CA {{ common_name }}.crt \
+  -CAkey {{ common_name }}.key -CAcreateserial \
+  -out server.crt -days 365
+```
+
+{% else %}
+This will create:
+- `{{ common_name }}.key` - Private key (keep secure!)
+- `{{ common_name }}.crt` - Self-signed certificate
+{% if configuration_mode == 'advanced' and output_formats != 'pem' %}
+{% if output_formats in ['der', 'all'] %}
+- `{{ common_name }}.der` - DER format certificate
+{% endif %}
+{% if output_formats in ['pkcs12', 'all'] %}
+- `{{ common_name }}.p12` - PKCS12 bundle
+{% endif %}
+{% endif %}
+
+{% endif %}
+
+### Verify Certificate
+
+```bash
+bash scripts/verify-cert.sh
+```
+
+{% if configuration_mode == 'advanced' and output_formats != 'pem' %}
+### Convert Formats
+
+```bash
+bash scripts/convert-formats.sh
+```
+{% endif %}
+
+{% if cert_type == 'selfsigned' %}
+### Renew Certificate
+
+```bash
+bash scripts/renew-cert.sh
+```
+{% endif %}
+
+## Web Server Configuration
+
+### Apache
+
+```apache
+<VirtualHost *:443>
+    ServerName {{ common_name }}
+    {% if include_san %}ServerAlias {{ san_domains.split(',')[0].strip() }}{% endif %}
+
+    SSLEngine on
+    SSLCertificateFile /path/to/{{ common_name }}.crt
+    SSLCertificateKeyFile /path/to/{{ common_name }}.key
+    {% if cert_type == 'csr' %}
+    SSLCertificateChainFile /path/to/chain.crt
+    {% endif %}
+
+    # Modern SSL configuration
+    SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1
+    SSLCipherSuite HIGH:!aNULL:!MD5
+    SSLHonorCipherOrder on
+</VirtualHost>
+```
+
+Enable SSL module and restart:
+```bash
+sudo a2enmod ssl
+sudo systemctl restart apache2
+```
+
+### Nginx
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name {{ common_name }}{% if include_san %} {{ san_domains.split(',')[0].strip() }}{% endif %};
+
+    ssl_certificate /path/to/{{ common_name }}.crt;
+    ssl_certificate_key /path/to/{{ common_name }}.key;
+
+    # Modern SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    # HSTS
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    # Your application config
+    location / {
+        # ...
+    }
+}
+```
+
+Test and reload:
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### Node.js (Express)
+
+```javascript
+const https = require('https');
+const fs = require('fs');
+const express = require('express');
+
+const app = express();
+
+const options = {
+  key: fs.readFileSync('{{ common_name }}.key'),
+  cert: fs.readFileSync('{{ common_name }}.crt')
+};
+
+https.createServer(options, app).listen(443, () => {
+  console.log('HTTPS server running on port 443');
+});
+```
+
+### Docker
+
+```dockerfile
+# Copy certificates
+COPY {{ common_name }}.crt /etc/ssl/certs/
+COPY {{ common_name }}.key /etc/ssl/private/
+
+# Set permissions
+RUN chmod 644 /etc/ssl/certs/{{ common_name }}.crt && \
+    chmod 600 /etc/ssl/private/{{ common_name }}.key
+```
+
+## Security Best Practices
+
+### File Permissions
+
+```bash
+# Private key - read only by owner
+chmod 600 {{ common_name }}.key
+chown root:root {{ common_name }}.key
+
+# Certificate - readable by all
+chmod 644 {{ common_name }}.crt
+```
+
+### Key Storage
+
+- ✅ Store private keys in `/etc/ssl/private/` or `/etc/pki/tls/private/`
+- ✅ Use filesystem encryption for key storage
+- ✅ Backup keys to secure, encrypted storage
+- ❌ Never commit private keys to version control
+- ❌ Never share private keys via email or chat
+
+### Monitoring
+
+Set up certificate expiration monitoring:
+
+```bash
+# Check expiration
+openssl x509 -in {{ common_name }}.crt -noout -checkend $((30*24*60*60))
+```
+
+Add to cron for automatic checking:
+```bash
+0 0 * * * /path/to/check-cert-expiry.sh
+```
+
+## Testing
+
+### Local Testing
+
+Add to `/etc/hosts`:
+```
+127.0.0.1 {{ common_name }}
+```
+
+Test with curl:
+```bash
+{% if cert_type == 'selfsigned' %}
+# Self-signed - skip verification for testing
+curl -k https://{{ common_name }}
+
+# Or add certificate to trusted store
+{% else %}
+curl https://{{ common_name }}
+{% endif %}
+```
+
+### SSL Labs Test
+
+For production certificates:
+```
+https://www.ssllabs.com/ssltest/analyze.html?d={{ common_name }}
+```
+
+### OpenSSL Test
+
+```bash
+openssl s_client -connect {{ common_name }}:443 -servername {{ common_name }}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### "Certificate verify failed"
+{% if cert_type == 'selfsigned' %}
+Self-signed certificates aren't trusted by browsers. Either:
+1. Add to browser's trusted certificates
+2. Use `-k` flag with curl for testing
+3. Use Let's Encrypt for production
+{% else %}
+- Ensure certificate chain is complete
+- Check certificate hasn't expired
+- Verify CN matches domain name
+{% endif %}
+
+#### "Permission denied" reading key
+```bash
+# Fix permissions
+sudo chmod 600 {{ common_name }}.key
+sudo chown www-data:www-data {{ common_name }}.key  # or appropriate user
+```
+
+#### "Key does not match certificate"
+```bash
+# Verify they match
+bash scripts/verify-cert.sh
+```
+
+### Debug Commands
+
+```bash
+# View certificate details
+openssl x509 -in {{ common_name }}.crt -text -noout
+
+# View CSR details
+openssl req -in {{ common_name }}.csr -text -noout
+
+# View key details
+openssl rsa -in {{ common_name }}.key -text -noout
+
+# Test certificate with specific protocol
+openssl s_client -connect {{ common_name }}:443 -tls1_2
+
+# Check certificate expiration
+openssl x509 -in {{ common_name }}.crt -noout -dates
+```
+
+## Production Recommendations
+
+{% if cert_type == 'selfsigned' %}
+⚠️ **Self-signed certificates should NOT be used in production!**
+
+For production, use:
+{% endif %}
+
+### Let's Encrypt (Free, Automated)
+
+```bash
+# Install certbot
+sudo apt-get install certbot
+
+# Get certificate
+sudo certbot certonly --standalone -d {{ common_name }}{% if include_san %} -d {{ san_domains.split(',')[0].strip() }}{% endif %}
+
+# Auto-renewal
+sudo certbot renew --dry-run
+```
+
+### Commercial Certificate Authority
+
+Popular CAs:
+- DigiCert
+- GlobalSign
+- Sectigo
+- GoDaddy
+
+Submit your CSR (`{{ common_name }}.csr`) to any CA for signing.
+
+## Additional Resources
+
+- [Mozilla SSL Configuration Generator](https://ssl-config.mozilla.org/)
+- [OpenSSL Documentation](https://www.openssl.org/docs/)
+- [Let's Encrypt](https://letsencrypt.org/)
+- [SSL Labs Best Practices](https://github.com/ssllabs/research/wiki/SSL-and-TLS-Deployment-Best-Practices)
+
+## Files Generated
+
+- `scripts/generate-cert.sh` - Certificate generation script
+- `scripts/verify-cert.sh` - Certificate verification script
+{% if configuration_mode == 'advanced' and output_formats != 'pem' %}
+- `scripts/convert-formats.sh` - Format conversion script
+{% endif %}
+{% if cert_type == 'selfsigned' %}
+- `scripts/renew-cert.sh` - Certificate renewal script
+{% endif %}
+{% if include_san or cert_type == 'ca' %}
+- `configs/openssl.cnf` - OpenSSL configuration file
+{% endif %}
+- `README.md` - This file
+
+---
+
+**Generated by OpsArtisan** | [Report Issues](https://github.com/your-repo/opsartisan)

@@ -1,54 +1,361 @@
 {
   "id": "openssl",
   "title": "OpenSSL Certificate Generator",
-  "description": "Generate OpenSSL commands for CSR or self-signed cert.",
+  "description": "Generate SSL/TLS certificates, CSRs, and private keys with advanced options for web servers, APIs, and internal services",
+  "category": "Security & Certificates",
+  "tags": ["ssl", "tls", "certificate", "security", "openssl", "https"],
+  "version": "2.0.0",
+
+  "dependencies": [],
+
+  "required_tools": [
+    "openssl"
+  ],
+
+  "optional_tools": [
+    "certbot"
+  ],
+
+  "environment_defaults": {
+    "dev": {
+      "configuration_mode": "simple",
+      "cert_type": "selfsigned",
+      "key_size": 2048,
+      "days_valid": 365,
+      "include_san": false
+    },
+    "staging": {
+      "configuration_mode": "advanced",
+      "cert_type": "selfsigned",
+      "key_size": 4096,
+      "days_valid": 730,
+      "include_san": true,
+      "key_encryption": false
+    },
+    "prod": {
+      "configuration_mode": "advanced",
+      "cert_type": "csr",
+      "key_size": 4096,
+      "days_valid": 365,
+      "include_san": true,
+      "key_encryption": true,
+      "output_formats": ["pem", "pkcs12"]
+    }
+  },
+
   "prompts": [
+    {
+      "id": "configuration_mode",
+      "type": "choice",
+      "label": "Configuration mode",
+      "choices": ["simple", "advanced"],
+      "default": "simple",
+      "description": "Simple: Basic certificate | Advanced: Full customization with SAN, encryption, formats"
+    },
+    {
+      "id": "cert_type",
+      "type": "choice",
+      "label": "Certificate type",
+      "choices": ["selfsigned", "csr", "ca"],
+      "default": "selfsigned",
+      "description": "selfsigned: For testing/dev | csr: For CA submission | ca: Certificate Authority"
+    },
     {
       "id": "common_name",
       "type": "string",
-      "label": "Common Name (CN, e.g. domain.com)",
-      "default": "example.com"
+      "label": "Common Name (CN)",
+      "default": "example.com",
+      "validation": "^[a-zA-Z0-9.-]+$",
+      "description": "Primary domain name or IP address"
     },
     {
       "id": "country",
       "type": "string",
-      "label": "Country (C)",
-      "default": "US"
+      "label": "Country Code (C)",
+      "default": "US",
+      "validation": "^[A-Z]{2}$"
     },
     {
-      "id": "org",
+      "id": "state",
+      "type": "string",
+      "label": "State/Province (ST)",
+      "default": "California",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "locality",
+      "type": "string",
+      "label": "City/Locality (L)",
+      "default": "San Francisco",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "organization",
       "type": "string",
       "label": "Organization (O)",
-      "default": "MyOrg"
+      "default": "MyCompany Inc"
     },
     {
-      "id": "days",
-      "type": "int",
-      "label": "Days valid (for self-signed)",
-      "default": 365
+      "id": "organizational_unit",
+      "type": "string",
+      "label": "Organizational Unit (OU)",
+      "default": "IT Department",
+      "condition": "configuration_mode == 'advanced'"
     },
     {
-      "id": "mode",
+      "id": "email",
+      "type": "string",
+      "label": "Email Address",
+      "default": "admin@example.com",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "key_size",
       "type": "choice",
-      "label": "Certificate type",
-      "choices": ["csr", "selfsigned"],
-      "default": "csr"
+      "label": "Key size (bits)",
+      "choices": [2048, 4096, 8192],
+      "default": 2048,
+      "description": "2048: Fast, adequate | 4096: Recommended | 8192: Maximum security (slow)"
+    },
+    {
+      "id": "key_algorithm",
+      "type": "choice",
+      "label": "Key algorithm",
+      "choices": ["rsa", "ec"],
+      "default": "rsa",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "RSA: Traditional, widely supported | EC: Modern, faster, smaller keys"
+    },
+    {
+      "id": "ec_curve",
+      "type": "choice",
+      "label": "EC curve",
+      "choices": ["prime256v1", "secp384r1", "secp521r1"],
+      "default": "prime256v1",
+      "condition": "key_algorithm == 'ec' && configuration_mode == 'advanced'",
+      "description": "prime256v1: Recommended, fast | secp384r1: Stronger | secp521r1: Maximum"
+    },
+    {
+      "id": "days_valid",
+      "type": "integer",
+      "label": "Days valid",
+      "default": 365,
+      "min": 1,
+      "max": 3650,
+      "condition": "cert_type != 'csr'"
+    },
+    {
+      "id": "key_encryption",
+      "type": "bool",
+      "label": "Encrypt private key with passphrase?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Adds password protection (requires manual entry on server restart)"
+    },
+    {
+      "id": "include_san",
+      "type": "bool",
+      "label": "Include Subject Alternative Names (SAN)?",
+      "default": false,
+      "description": "Required for multiple domains/subdomains"
+    },
+    {
+      "id": "san_domains",
+      "type": "string",
+      "label": "SAN domains (comma-separated)",
+      "default": "www.example.com,api.example.com",
+      "condition": "include_san",
+      "description": "Additional domains this certificate should cover"
+    },
+    {
+      "id": "san_ips",
+      "type": "string",
+      "label": "SAN IP addresses (comma-separated)",
+      "default": "",
+      "condition": "include_san && configuration_mode == 'advanced'",
+      "description": "IP addresses this certificate should cover"
+    },
+    {
+      "id": "output_formats",
+      "type": "choice",
+      "label": "Output formats",
+      "choices": ["pem", "der", "pkcs12", "all"],
+      "default": "pem",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "PEM: Text-based | DER: Binary | PKCS12: Bundle for Windows/Java"
+    },
+    {
+      "id": "ca_mode",
+      "type": "bool",
+      "label": "Enable CA extensions?",
+      "default": true,
+      "condition": "cert_type == 'ca' && configuration_mode == 'advanced'",
+      "description": "Allows this cert to sign other certificates"
+    },
+    {
+      "id": "hash_algorithm",
+      "type": "choice",
+      "label": "Hash algorithm",
+      "choices": ["sha256", "sha384", "sha512"],
+      "default": "sha256",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "id": "create_chain",
+      "type": "bool",
+      "label": "Create certificate chain?",
+      "default": false,
+      "condition": "cert_type == 'ca' && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "output_directory",
+      "type": "string",
+      "label": "Output directory",
+      "default": "./certs",
+      "condition": "configuration_mode == 'advanced'"
     }
   ],
+
   "outputs": [
     {
-      "path": "cert-gen.sh",
-      "template": "cert-gen.j2"
+      "path": "scripts/generate-cert.sh",
+      "template": "generate_cert.j2"
+    },
+    {
+      "path": "configs/openssl.cnf",
+      "template": "openssl_config.j2",
+      "condition": "include_san || cert_type == 'ca'"
+    },
+    {
+      "path": "scripts/verify-cert.sh",
+      "template": "verify_cert.j2"
+    },
+    {
+      "path": "scripts/convert-formats.sh",
+      "template": "convert_formats.j2",
+      "condition": "configuration_mode == 'advanced' && output_formats != 'pem'"
+    },
+    {
+      "path": "scripts/renew-cert.sh",
+      "template": "renew_cert.j2",
+      "condition": "cert_type == 'selfsigned'"
+    },
+    {
+      "path": "README.md",
+      "template": "readme.j2"
     }
   ],
+
   "validators": [
     {
-      "cmd": "bash cert-gen.sh",
-      "fail_on_nonzero": false
+      "command": "bash -n scripts/generate-cert.sh",
+      "description": "Validate script syntax",
+      "timeout": 10
+    },
+    {
+      "command": "openssl version",
+      "description": "Check OpenSSL installation",
+      "timeout": 5
     }
   ],
+
+  "tests": [
+    {
+      "command": "bash -n scripts/*.sh",
+      "description": "Validate all scripts",
+      "cleanup": null
+    }
+  ],
+
+  "hooks": {
+    "post_generation": [
+      {
+        "type": "shell",
+        "command": "chmod +x scripts/*.sh",
+        "description": "Make scripts executable",
+        "on_failure": "warn"
+      },
+      {
+        "type": "shell",
+        "command": "mkdir -p {{ output_directory | default('./certs') }}",
+        "description": "Create output directory",
+        "on_failure": "warn",
+        "condition": "configuration_mode == 'advanced'"
+      },
+      {
+        "type": "info",
+        "message": "Review configuration before generating certificates",
+        "on_failure": "ignore"
+      },
+      {
+        "type": "info",
+        "message": "Keep private keys secure and never commit to version control",
+        "on_failure": "ignore"
+      }
+    ]
+  },
+
   "next_steps": [
-    "Run `bash cert-gen.sh` to generate certificate files.",
-    "For production, consider Let's Encrypt or ACME automation."
-  ]
+    "Review generated configuration in configs/openssl.cnf (if created)",
+    "Run: bash scripts/generate-cert.sh",
+    "Verify certificate: bash scripts/verify-cert.sh",
+    "For CSR: Submit {{ common_name }}.csr to your Certificate Authority",
+    "For self-signed: Install {{ common_name }}.crt on your web server",
+    "Secure private key: chmod 600 {{ common_name }}.key",
+    "For production: Consider using Let's Encrypt with certbot"
+  ],
+
+  "example_usage": "opsartisan new openssl --common-name example.com --cert-type selfsigned",
+
+  "documentation": {
+    "readme": "README.md",
+    "examples": [
+      {
+        "title": "Simple self-signed certificate",
+        "command": "opsartisan new openssl --common-name localhost --cert-type selfsigned",
+        "description": "Basic cert for local development"
+      },
+      {
+        "title": "Production CSR with SAN",
+        "command": "opsartisan new openssl --configuration-mode advanced --cert-type csr --common-name example.com --include-san --san-domains 'www.example.com,api.example.com'",
+        "description": "CSR for CA submission with multiple domains"
+      },
+      {
+        "title": "Internal CA certificate",
+        "command": "opsartisan new openssl --cert-type ca --common-name 'Internal CA' --days-valid 3650",
+        "description": "Create your own Certificate Authority"
+      },
+      {
+        "title": "High-security certificate",
+        "command": "opsartisan new openssl --configuration-mode advanced --key-size 4096 --hash-algorithm sha512 --key-encryption",
+        "description": "Maximum security with encrypted key"
+      }
+    ],
+    "links": [
+      {
+        "title": "OpenSSL Documentation",
+        "url": "https://www.openssl.org/docs/"
+      },
+      {
+        "title": "Let's Encrypt",
+        "url": "https://letsencrypt.org/"
+      },
+      {
+        "title": "SSL/TLS Best Practices",
+        "url": "https://wiki.mozilla.org/Security/Server_Side_TLS"
+      }
+    ],
+    "best_practices": [
+      "Use at least 2048-bit keys (4096-bit for production)",
+      "Never commit private keys to version control",
+      "Use Let's Encrypt for production (free, automated)",
+      "Enable SAN for modern browsers",
+      "Keep private keys encrypted when possible",
+      "Set appropriate file permissions (600 for keys)",
+      "Rotate certificates before expiry",
+      "Use SHA-256 or better for hashing",
+      "Store certificates and keys in secure locations",
+      "Monitor certificate expiration dates"
+    ]
+  }
 }
