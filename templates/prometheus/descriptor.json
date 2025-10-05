@@ -1,23 +1,329 @@
 {
   "id": "prometheus",
-  "title": "Prometheus Scrape Job / Alert Rule",
-  "description": "Generate scrape configs or alerting rules.",
-  "prompts": [
-    {"id": "job_name", "type": "string", "label": "Job name", "default": "myjob"},
-    {"id": "metrics_path", "type": "string", "label": "Metrics path", "default": "/metrics"},
-    {"id": "scrape_interval", "type": "string", "label": "Scrape interval", "default": "30s"}
-  ],
-  "outputs": [
-    {"path": "{{ job_name }}-scrape.yml", "template": "scrape.j2"}
-  ],
-  "next_steps": [
-    "Copy the generated YAML to your Prometheus configuration directory (/etc/prometheus/ or wherever Prometheus reads configs).",
-    "Update prometheus.yml to include the new scrape job:",
-    "scrape_configs:\n  - job_name: 'myjob'\n    file_sd_configs:\n      - files:\n        - '/etc/prometheus/myjob-scrape.yml'\n",
-    "Validate configuration:",
-    "prometheus --config.file=/etc/prometheus/prometheus.yml --web.listen-address=:9090\n",
-    "Reload Prometheus or restart service to apply changes.",
-    "Verify metrics appear in Prometheus UI."
-  ]
-}
+  "title": "Prometheus Configuration (Scrape Jobs / Alert Rules / Recording Rules)",
+  "description": "Generate production-ready Prometheus scrape configs, alerting rules, recording rules, and service discovery",
+  "category": "Monitoring",
+  "tags": ["prometheus", "monitoring", "metrics", "alerting", "observability"],
+  "version": "2.0.0",
 
+  "dependencies": [],
+
+  "required_tools": [
+    "prometheus"
+  ],
+
+  "optional_tools": [
+    "promtool",
+    "alertmanager"
+  ],
+
+  "environment_defaults": {
+    "dev": {
+      "configuration_mode": "simple",
+      "config_type": "scrape",
+      "scrape_interval": "30s",
+      "include_alerts": false,
+      "include_recording_rules": false,
+      "service_discovery": false
+    },
+    "staging": {
+      "configuration_mode": "advanced",
+      "config_type": "scrape",
+      "scrape_interval": "15s",
+      "include_alerts": true,
+      "include_recording_rules": false,
+      "service_discovery": true,
+      "relabel_configs": true
+    },
+    "prod": {
+      "configuration_mode": "advanced",
+      "config_type": "full",
+      "scrape_interval": "15s",
+      "include_alerts": true,
+      "include_recording_rules": true,
+      "service_discovery": true,
+      "relabel_configs": true,
+      "alert_severity_labels": true
+    }
+  },
+
+  "prompts": [
+    {
+      "id": "configuration_mode",
+      "type": "choice",
+      "label": "Configuration mode",
+      "choices": ["simple", "advanced"],
+      "default": "simple",
+      "description": "Simple: Basic scrape config | Advanced: Full monitoring with alerts"
+    },
+    {
+      "id": "config_type",
+      "type": "choice",
+      "label": "Configuration type",
+      "choices": ["scrape", "alerts", "recording", "full"],
+      "default": "scrape",
+      "description": "scrape: Scrape configs | alerts: Alert rules | recording: Recording rules | full: All"
+    },
+    {
+      "id": "job_name",
+      "type": "string",
+      "label": "Job name",
+      "default": "myjob",
+      "validation": "^[a-z0-9_-]+$"
+    },
+    {
+      "id": "metrics_path",
+      "type": "string",
+      "label": "Metrics path",
+      "default": "/metrics",
+      "condition": "config_type in ['scrape', 'full']"
+    },
+    {
+      "id": "scrape_interval",
+      "type": "string",
+      "label": "Scrape interval",
+      "default": "30s",
+      "condition": "config_type in ['scrape', 'full']"
+    },
+    {
+      "id": "scrape_timeout",
+      "type": "string",
+      "label": "Scrape timeout",
+      "default": "10s",
+      "condition": "config_type in ['scrape', 'full'] && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "target_type",
+      "type": "choice",
+      "label": "Target type",
+      "choices": ["static", "kubernetes", "consul", "ec2", "gce", "azure", "dns"],
+      "default": "static",
+      "condition": "config_type in ['scrape', 'full'] && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "static_targets",
+      "type": "string",
+      "label": "Static targets (comma-separated, e.g., localhost:9090,host2:9090)",
+      "default": "localhost:9090",
+      "condition": "target_type == 'static' && config_type in ['scrape', 'full']"
+    },
+    {
+      "id": "kubernetes_role",
+      "type": "choice",
+      "label": "Kubernetes role",
+      "choices": ["pod", "service", "endpoints", "node"],
+      "default": "pod",
+      "condition": "target_type == 'kubernetes' && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "include_basic_auth",
+      "type": "bool",
+      "label": "Include basic authentication?",
+      "default": false,
+      "condition": "config_type in ['scrape', 'full'] && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "include_tls",
+      "type": "bool",
+      "label": "Include TLS configuration?",
+      "default": false,
+      "condition": "config_type in ['scrape', 'full'] && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "relabel_configs",
+      "type": "bool",
+      "label": "Add relabel configurations?",
+      "default": false,
+      "condition": "config_type in ['scrape', 'full'] && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "include_alerts",
+      "type": "bool",
+      "label": "Generate alert rules?",
+      "default": false,
+      "condition": "config_type in ['alerts', 'full']"
+    },
+    {
+      "id": "alert_types",
+      "type": "string",
+      "label": "Alert types (comma-separated: availability,latency,errors,resources)",
+      "default": "availability,latency,errors",
+      "condition": "include_alerts && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "include_recording_rules",
+      "type": "bool",
+      "label": "Generate recording rules?",
+      "default": false,
+      "condition": "config_type in ['recording', 'full'] && configuration_mode == 'advanced'"
+    },
+    {
+      "id": "alertmanager_url",
+      "type": "string",
+      "label": "Alertmanager URL",
+      "default": "http://localhost:9093",
+      "condition": "include_alerts && configuration_mode == 'advanced'"
+    }
+  ],
+
+  "outputs": [
+    {
+      "path": "prometheus.yml",
+      "template": "prometheus_config.j2",
+      "condition": "config_type == 'full' && configuration_mode == 'advanced'"
+    },
+    {
+      "path": "scrape-configs/{{ job_name }}.yml",
+      "template": "scrape.j2",
+      "condition": "config_type in ['scrape', 'full']"
+    },
+    {
+      "path": "rules/{{ job_name }}-alerts.yml",
+      "template": "alerts.j2",
+      "condition": "config_type in ['alerts', 'full'] && include_alerts"
+    },
+    {
+      "path": "rules/{{ job_name }}-recording.yml",
+      "template": "recording.j2",
+      "condition": "config_type in ['recording', 'full'] && include_recording_rules"
+    },
+    {
+      "path": "alertmanager.yml",
+      "template": "alertmanager.j2",
+      "condition": "include_alerts && configuration_mode == 'advanced'"
+    },
+    {
+      "path": "scripts/validate.sh",
+      "template": "validate.j2"
+    },
+    {
+      "path": "scripts/reload.sh",
+      "template": "reload.j2"
+    },
+    {
+      "path": "docker-compose.yml",
+      "template": "docker_compose.j2",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "path": "README.md",
+      "template": "readme.j2"
+    }
+  ],
+
+  "validators": [
+    {
+      "command": "promtool check config prometheus.yml",
+      "description": "Validate Prometheus configuration",
+      "timeout": 10,
+      "condition": "config_type == 'full'",
+      "optional": true
+    },
+    {
+      "command": "promtool check rules rules/*.yml",
+      "description": "Validate alert and recording rules",
+      "timeout": 10,
+      "condition": "include_alerts or include_recording_rules",
+      "optional": true
+    }
+  ],
+
+  "tests": [
+    {
+      "command": "bash scripts/validate.sh",
+      "description": "Run validation script",
+      "cleanup": null
+    }
+  ],
+
+  "hooks": {
+    "post_generation": [
+      {
+        "type": "shell",
+        "command": "chmod +x scripts/*.sh",
+        "description": "Make scripts executable",
+        "on_failure": "warn"
+      },
+      {
+        "type": "shell",
+        "command": "mkdir -p data",
+        "description": "Create data directory",
+        "on_failure": "ignore"
+      },
+      {
+        "type": "info",
+        "message": "Validate configuration with: bash scripts/validate.sh",
+        "on_failure": "ignore"
+      }
+    ]
+  },
+
+  "next_steps": [
+    "Review generated configuration files",
+    "Validate configuration: bash scripts/validate.sh",
+    "Copy to Prometheus config directory: sudo cp scrape-configs/*.yml /etc/prometheus/scrape-configs/",
+    "Copy alert rules: sudo cp rules/*.yml /etc/prometheus/rules/",
+    "Update main prometheus.yml to include new configs",
+    "Reload Prometheus: bash scripts/reload.sh",
+    "Or restart: sudo systemctl restart prometheus",
+    "Verify metrics in Prometheus UI: http://localhost:9090"
+  ],
+
+  "example_usage": "opsartisan new prometheus --job-name myapp --metrics-path /metrics",
+
+  "documentation": {
+    "readme": "README.md",
+    "examples": [
+      {
+        "title": "Simple scrape config",
+        "command": "opsartisan new prometheus --job-name myapp --config-type scrape",
+        "description": "Basic metrics scraping"
+      },
+      {
+        "title": "Full monitoring stack",
+        "command": "opsartisan new prometheus --configuration-mode advanced --config-type full --include-alerts",
+        "description": "Complete setup with alerts and recording rules"
+      },
+      {
+        "title": "Kubernetes service discovery",
+        "command": "opsartisan new prometheus --configuration-mode advanced --target-type kubernetes",
+        "description": "Auto-discover Kubernetes targets"
+      },
+      {
+        "title": "Alert rules only",
+        "command": "opsartisan new prometheus --config-type alerts --include-alerts",
+        "description": "Generate alerting rules"
+      }
+    ],
+    "links": [
+      {
+        "title": "Prometheus Documentation",
+        "url": "https://prometheus.io/docs/"
+      },
+      {
+        "title": "Configuration Reference",
+        "url": "https://prometheus.io/docs/prometheus/latest/configuration/configuration/"
+      },
+      {
+        "title": "Alerting Rules",
+        "url": "https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/"
+      },
+      {
+        "title": "Recording Rules",
+        "url": "https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/"
+      }
+    ],
+    "best_practices": [
+      "Use appropriate scrape intervals (15-60s typical)",
+      "Implement high-availability setup for production",
+      "Use recording rules for complex queries",
+      "Set proper retention periods",
+      "Use service discovery when possible",
+      "Label metrics consistently",
+      "Monitor Prometheus itself",
+      "Use alertmanager for notifications",
+      "Test alert rules before deploying",
+      "Document custom metrics"
+    ]
+  }
+}

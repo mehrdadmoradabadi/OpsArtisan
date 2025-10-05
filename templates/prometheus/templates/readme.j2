@@ -1,0 +1,454 @@
+# Prometheus Monitoring: {{ job_name }}
+
+{% if configuration_mode == 'simple' %}
+Basic Prometheus scrape configuration for {{ job_name }}.
+{% else %}
+Production-ready Prometheus monitoring stack for {{ job_name }}.
+{% endif %}
+
+## Configuration
+
+- **Job Name:** {{ job_name }}
+{% if config_type in ['scrape', 'full'] %}
+- **Metrics Path:** {{ metrics_path }}
+- **Scrape Interval:** {{ scrape_interval }}
+{% if target_type and configuration_mode == 'advanced' %}
+- **Target Type:** {{ target_type }}
+{% endif %}
+{% endif %}
+{% if include_alerts %}
+- **Alerting:** Enabled
+{% endif %}
+{% if include_recording_rules and configuration_mode == 'advanced' %}
+- **Recording Rules:** Enabled
+{% endif %}
+
+## Files Generated
+
+{% if config_type == 'full' and configuration_mode == 'advanced' %}
+- `prometheus.yml` - Main Prometheus configuration
+{% endif %}
+{% if config_type in ['scrape', 'full'] %}
+- `scrape-configs/{{ job_name }}.yml` - Scrape configuration
+{% endif %}
+{% if include_alerts %}
+- `rules/{{ job_name }}-alerts.yml` - Alert rules
+{% endif %}
+{% if include_recording_rules and configuration_mode == 'advanced' %}
+- `rules/{{ job_name }}-recording.yml` - Recording rules
+{% endif %}
+{% if include_alerts and configuration_mode == 'advanced' %}
+- `alertmanager.yml` - Alertmanager configuration
+{% endif %}
+{% if configuration_mode == 'advanced' %}
+- `docker-compose.yml` - Docker Compose stack
+{% endif %}
+- `scripts/validate.sh` - Validation script
+- `scripts/reload.sh` - Reload script
+
+## Installation
+
+### Option 1: Existing Prometheus
+
+If you have Prometheus already installed:
+
+```bash
+# Copy scrape configs
+sudo cp scrape-configs/*.yml /etc/prometheus/scrape-configs/
+
+{% if include_alerts or include_recording_rules %}
+# Copy rules
+sudo cp rules/*.yml /etc/prometheus/rules/
+{% endif %}
+
+# Update main prometheus.yml to include:
+scrape_configs:
+  - job_name: 'file_sd'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/scrape-configs/*.yml'
+        refresh_interval: 5m
+
+{% if include_alerts or include_recording_rules %}
+rule_files:
+  {% if include_alerts %}- '/etc/prometheus/rules/*-alerts.yml'{% endif %}
+  {% if include_recording_rules %}- '/etc/prometheus/rules/*-recording.yml'{% endif %}
+{% endif %}
+
+# Validate
+sudo promtool check config /etc/prometheus/prometheus.yml
+
+# Reload
+sudo systemctl reload prometheus
+```
+
+### Option 2: Docker Compose
+
+{% if configuration_mode == 'advanced' %}
+Start the complete monitoring stack:
+
+```bash
+# Start services
+docker-compose up -d
+
+# Check logs
+docker-compose logs -f prometheus
+
+# Access interfaces
+# Prometheus: http://localhost:9090
+# Grafana: http://localhost:3000 (admin/admin)
+{% if include_alerts %}# Alertmanager: http://localhost:9093{% endif %}
+```
+
+{% else %}
+Create a `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./scrape-configs:/etc/prometheus/scrape-configs
+      - ./data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+```
+
+Then run: `docker-compose up -d`
+{% endif %}
+
+## Validation
+
+Run the validation script:
+
+```bash
+bash scripts/validate.sh
+```
+
+Manual validation:
+
+```bash
+{% if config_type == 'full' %}
+# Validate main config
+promtool check config prometheus.yml
+{% endif %}
+
+# Validate rules
+{% if include_alerts %}
+promtool check rules rules/{{ job_name }}-alerts.yml
+{% endif %}
+{% if include_recording_rules %}
+promtool check rules rules/{{ job_name }}-recording.yml
+{% endif %}
+```
+
+## Usage
+
+### Reload Configuration
+
+```bash
+bash scripts/reload.sh
+```
+
+Or manually:
+
+```bash
+# Via HTTP
+curl -X POST http://localhost:9090/-/reload
+
+# Via systemctl
+sudo systemctl reload prometheus
+```
+
+### Query Metrics
+
+Access Prometheus UI: http://localhost:9090
+
+Example queries:
+
+```promql
+# Check if targets are up
+up{job="{{ job_name }}"}
+
+# Request rate
+rate({{ job_name }}_http_requests_total[5m])
+
+# Error rate
+rate({{ job_name }}_http_requests_total{status=~"5.."}[5m])
+
+{% if include_recording_rules %}
+# Use recording rules
+{{ job_name }}:http_requests:rate5m
+{{ job_name }}:http_request_duration:p95
+{% endif %}
+```
+
+### View Alerts
+
+{% if include_alerts %}
+Access Alertmanager: http://localhost:9093
+
+Check firing alerts:
+
+```bash
+# Via API
+curl http://localhost:9093/api/v2/alerts
+
+# Via promtool
+promtool query instant http://localhost:9090 'ALERTS{alertstate="firing"}'
+```
+
+{% else %}
+Configure alerts by adding alert rules and Alertmanager configuration.
+{% endif %}
+
+## Targets
+
+{% if target_type == 'static' %}
+### Static Targets
+
+Configured targets:
+{% for target in static_targets.split(',') %}
+- {{ target.strip() }}
+{% endfor %}
+
+To add more targets, edit `scrape-configs/{{ job_name }}.yml`:
+
+```yaml
+static_configs:
+  - targets:
+      - 'host1:9090'
+      - 'host2:9090'
+```
+
+{% elif target_type == 'kubernetes' and configuration_mode == 'advanced' %}
+### Kubernetes Service Discovery
+
+Automatically discovers {{ kubernetes_role }}s in Kubernetes.
+
+Ensure Prometheus has proper RBAC permissions:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - services
+      - endpoints
+      - pods
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: monitoring
+EOF
+```
+
+{% elif target_type == 'consul' and configuration_mode == 'advanced' %}
+### Consul Service Discovery
+
+Automatically discovers services registered in Consul.
+
+Ensure Consul is accessible and services are registered with appropriate tags.
+
+{% endif %}
+
+## Alerting
+
+{% if include_alerts %}
+### Configured Alerts
+
+{% if configuration_mode == 'simple' or 'availability' in (alert_types if configuration_mode == 'advanced' and alert_types else 'availability') %}
+**Availability:**
+- `{{ job_name | title }}Down` - Instance is down for >5min
+- `{{ job_name | title }}HighErrorRate` - Error rate >5%
+{% endif %}
+
+{% if configuration_mode == 'advanced' and 'latency' in alert_types %}
+**Latency:**
+- `{{ job_name | title }}HighLatency` - P95 latency >1s
+- `{{ job_name | title }}VeryHighLatency` - P95 latency >5s
+{% endif %}
+
+{% if configuration_mode == 'advanced' and 'errors' in alert_types %}
+**Errors:**
+- `{{ job_name | title }}4xxErrors` - 4xx error rate >10%
+- `{{ job_name | title }}5xxErrors` - 5xx error rate >5%
+{% endif %}
+
+{% if configuration_mode == 'advanced' and 'resources' in alert_types %}
+**Resources:**
+- `{{ job_name | title }}HighCPU` - CPU usage >80%
+- `{{ job_name | title }}HighMemory` - Memory usage >80%
+- `{{ job_name | title }}TooManyRestarts` - >2 restarts in 15min
+{% endif %}
+
+### Test Alerts
+
+Test alert routing:
+
+```bash
+# Send test alert to Alertmanager
+curl -X POST http://localhost:9093/api/v1/alerts \
+  -H 'Content-Type: application/json' \
+  -d '[{
+    "labels": {
+      "alertname": "TestAlert",
+      "severity": "warning"
+    },
+    "annotations": {
+      "summary": "This is a test alert"
+    }
+  }]'
+```
+
+### Silence Alerts
+
+```bash
+# Create silence
+amtool silence add \
+  alertname=TestAlert \
+  --duration=1h \
+  --comment="Testing"
+
+# List silences
+amtool silence query
+```
+
+{% else %}
+Alerting is not configured. To add alerts:
+
+1. Create alert rules in `rules/{{ job_name }}-alerts.yml`
+2. Configure Alertmanager in `alertmanager.yml`
+3. Update `prometheus.yml` to include alert rules and Alertmanager
+
+{% endif %}
+
+## Monitoring
+
+### Check Prometheus Status
+
+```bash
+# Service status
+sudo systemctl status prometheus
+
+# Check targets
+curl http://localhost:9090/api/v1/targets | jq
+
+# Check rules
+curl http://localhost:9090/api/v1/rules | jq
+```
+
+### View Metrics
+
+```bash
+# All metrics for job
+curl http://localhost:9090/api/v1/query?query=up{job="{{ job_name }}"}
+
+# Specific metric
+curl 'http://localhost:9090/api/v1/query?query={{ job_name }}_http_requests_total'
+```
+
+### Grafana Dashboards
+
+{% if configuration_mode == 'advanced' %}
+Access Grafana: http://localhost:3000
+
+1. Login (admin/admin)
+2. Add Prometheus data source:
+   - URL: http://prometheus:9090
+3. Import dashboards:
+   - Node Exporter: Dashboard ID 1860
+   - Prometheus Stats: Dashboard ID 3662
+
+{% else %}
+Install Grafana and import pre-built dashboards from grafana.com
+{% endif %}
+
+## Troubleshooting
+
+### Targets Not Discovered
+
+```bash
+# Check Prometheus logs
+sudo journalctl -u prometheus -f
+
+# Check target configuration
+curl http://localhost:9090/api/v1/targets | jq '.data.activeTargets'
+```
+
+### Metrics Not Appearing
+
+1. Check target is up: `up{job="{{ job_name }}"}`
+2. Verify metrics path is correct
+3. Check firewall rules
+4. Verify target is exposing metrics
+
+### Alerts Not Firing
+
+```bash
+# Check alert rules
+promtool check rules rules/*.yml
+
+# View pending/firing alerts
+curl http://localhost:9090/api/v1/rules | jq
+
+# Check Alertmanager
+curl http://localhost:9093/api/v2/alerts
+```
+
+### High Cardinality Issues
+
+If Prometheus is slow or using too much memory:
+
+1. Check series count: `prometheus_tsdb_symbol_table_size_bytes`
+2. Identify high-cardinality metrics
+3. Add metric_relabel_configs to drop unnecessary labels
+4. Use recording rules to pre-aggregate
+
+## Best Practices
+
+- ✅ Use appropriate scrape intervals (15-60s typical)
+- ✅ Set proper retention policies
+- ✅ Use recording rules for expensive queries
+- ✅ Label metrics consistently
+- ✅ Monitor Prometheus itself
+- ✅ Test alert rules before deploying
+- ✅ Use service discovery when possible
+- ✅ Implement high availability for production
+- ✅ Back up Prometheus data regularly
+- ✅ Document custom metrics and alerts
+
+## Resources
+
+- [Prometheus Documentation](https://prometheus.io/docs/)
+- [PromQL Basics](https://prometheus.io/docs/prometheus/latest/querying/basics/)
+- [Alerting Best Practices](https://prometheus.io/docs/practices/alerting/)
+- [Grafana Dashboards](https://grafana.com/grafana/dashboards/)
+
+---
+
+**Generated by OpsArtisan**
