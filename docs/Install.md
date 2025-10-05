@@ -2,106 +2,109 @@
 
 ## Prerequisites
 
-- Python 3.8 or higher
-- pip
+- Ubuntu/Debian-based Linux distribution
+- Python 3.8 or higher (will be installed automatically)
 - bash shell (for tab completion)
-
-## Quick Install (Recommended)
-
-### 1. Activate your virtual environment
-```bash
-source venv/bin/activate
-```
-
-### 2. Run the installation script
-```bash
-chmod +x install.sh
-./install.sh
-```
-
-### 3. Reload your shell
-```bash
-exec bash
-```
-
-### 4. Test it!
-```bash
-opsartisan --version
-opsartisan list
-```
-
-Try tab completion:
-```bash
-opsartisan <TAB><TAB>
-```
 
 ---
 
-## Manual Installation
+## Installation Methods
 
-If the automated script doesn't work, follow these steps:
+### Method 1: System-wide Installation via .deb Package (Recommended)
 
-### 1. Install the package
+This method installs OpsArtisan system-wide, making it available to all users without needing Python virtual environments.
 
-From your project directory with activated venv:
+#### Step 1: Install Dependencies
 
 ```bash
-pip install --user -e .
+sudo apt-get update
+sudo apt-get install python3 python3-pip python3-venv fakeroot
 ```
 
-Or for development mode:
+#### Step 2: Build the .deb Package
+
 ```bash
-pip install -e ".[dev,interactive]"
+cd /path/to/opsartisan
+chmod +x build-deb.sh
+./build-deb.sh
 ```
 
-### 2. Add to PATH (if needed)
+This will create `opsartisan_2.0.0_all.deb` in the current directory.
 
-Check if `opsartisan` is in your PATH:
+#### Step 3: Install the Package
+
 ```bash
-which opsartisan
+sudo dpkg -i opsartisan_2.0.0_all.deb
 ```
 
-If not found, add this to `~/.bashrc`:
+If you get dependency errors, run:
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
+sudo apt-get install -f
 ```
 
-Then reload:
-```bash
-source ~/.bashrc
-```
-
-### 3. Install Bash Completion
-
-**Option A: Using the built-in command (Recommended)**
-```bash
-opsartisan completion install bash
-```
-
-**Option B: Manual installation**
-```bash
-# Generate completion script
-_OPSARTISAN_COMPLETE=bash_source opsartisan > ~/.bash_completion.d/opsartisan
-
-# Add to .bashrc
-echo '[ -f ~/.bash_completion.d/opsartisan ] && source ~/.bash_completion.d/opsartisan' >> ~/.bashrc
-
-# Reload shell
-exec bash
-```
-
-### 4. Verify Installation
+#### Step 4: Verify Installation
 
 ```bash
 # Check version
 opsartisan --version
 
-# List commands
-opsartisan --help
+# List available templates
+opsartisan list
 
-# Test completion (type opsartisan then press TAB twice)
+# Reload shell for tab completion
+exec bash
+
+# Test tab completion
 opsartisan <TAB><TAB>
 ```
+
+**Installation Locations:**
+- **Command:** `/usr/local/bin/opsartisan`
+- **Application:** `/opt/opsartisan/`
+- **System Templates:** `/usr/share/opsartisan/templates/`
+- **User Templates:** `~/.opsartisan/templates/`
+- **Bash Completion:** `/etc/bash_completion.d/opsartisan`
+
+---
+
+### Method 2: User-level Installation (Development)
+
+For developers or users who want to modify OpsArtisan.
+
+#### Step 1: Clone and Setup Virtual Environment
+
+```bash
+git clone https://github.com/<your-username>/opsartisan.git
+cd opsartisan
+python3 -m venv venv
+source venv/bin/activate
+```
+
+#### Step 2: Run Installation Script
+
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+#### Step 3: Reload Shell
+
+```bash
+exec bash
+```
+
+#### Step 4: Verify
+
+```bash
+opsartisan --version
+opsartisan list
+opsartisan <TAB><TAB>
+```
+
+**Installation Locations:**
+- **Command:** `venv/bin/opsartisan` or `~/.local/bin/opsartisan`
+- **User Templates:** `~/.opsartisan/templates/`
+- **Bash Completion:** `~/.bash_completion.d/opsartisan`
 
 ---
 
@@ -109,10 +112,10 @@ opsartisan <TAB><TAB>
 
 Once installed, you get auto-completion for:
 
-- **Commands**: `opsartisan <TAB>` shows all available commands
-- **Template IDs**: `opsartisan new <TAB>` shows available templates
-- **Preset names**: `opsartisan new template-id --preset <TAB>`
-- **Options**: `opsartisan new --<TAB>` shows all flags
+- **Commands:** `opsartisan <TAB>` → shows all available commands
+- **Template IDs:** `opsartisan new <TAB>` → shows available templates
+- **Preset names:** `opsartisan new template-id --preset <TAB>` → shows saved presets
+- **Options:** `opsartisan new --<TAB>` → shows all flags
 
 ### Example Usage:
 ```bash
@@ -131,110 +134,282 @@ $ opsartisan new --<TAB>
 
 ---
 
+## Template Locations
+
+OpsArtisan searches for templates in multiple locations (in order):
+
+1. **Current directory:** `./templates/`
+2. **User templates:** `~/.opsartisan/templates/`
+3. **System templates:** `/usr/share/opsartisan/templates/` (system-wide installation only)
+
+### Adding System Templates (requires root)
+
+```bash
+sudo ./add-system-template.sh /path/to/your-template
+```
+
+### Adding User Templates
+
+```bash
+opsartisan add-template /path/to/your-template
+```
+
+Or manually:
+```bash
+cp -r /path/to/your-template ~/.opsartisan/templates/
+```
+
+---
+
 ## Configuration Directories
 
 After installation, OpsArtisan creates:
 
-- `~/.opsartisan/` - Main configuration directory
-- `~/.opsartisan/templates/` - User templates
+- `~/.opsartisan/` - Main user configuration directory
+- `~/.opsartisan/templates/` - User-specific templates
 - `~/.opsartisan/plugins/` - Custom plugins
 - `~/.opsartisan/presets.json` - Saved presets
+
+System-wide installation also creates:
+- `/usr/share/opsartisan/templates/` - System templates (all users)
 
 ---
 
 ## Troubleshooting
 
-### Command not found after install
+### Command not found after .deb install
 
-1. Check if it's installed:
-   ```bash
-   pip show opsartisan
-   ```
+Check if installed:
+```bash
+dpkg -l | grep opsartisan
+```
 
-2. Add `~/.local/bin` to PATH:
-   ```bash
-   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-   source ~/.bashrc
-   ```
+Verify binary exists:
+```bash
+ls -la /usr/local/bin/opsartisan
+```
+
+Try running directly:
+```bash
+/usr/local/bin/opsartisan --version
+```
 
 ### Tab completion not working
 
-1. Ensure completion script exists:
+1. Verify completion file exists:
    ```bash
+   # For system install:
+   ls -la /etc/bash_completion.d/opsartisan
+   
+   # For user install:
    ls -la ~/.bash_completion.d/opsartisan
    ```
 
-2. Check if it's sourced in .bashrc:
+2. Manually source it:
    ```bash
-   grep "opsartisan" ~/.bashrc
+   # For system install:
+   source /etc/bash_completion.d/opsartisan
+   
+   # For user install:
+   source ~/.bash_completion.d/opsartisan
    ```
 
-3. Reinstall completion:
+3. Reload shell:
    ```bash
-   opsartisan completion install bash
    exec bash
    ```
 
-4. Try manual source:
+4. Reinstall completion:
    ```bash
-   source ~/.bash_completion.d/opsartisan
-   opsartisan <TAB>
+   opsartisan completion install bash
    ```
 
-### Permission denied on install.sh
+### No templates showing up
 
+Check template locations:
 ```bash
-chmod +x install.sh
+# System templates (if installed via .deb)
+ls /usr/share/opsartisan/templates/
+
+# User templates
+ls ~/.opsartisan/templates/
+
+# Local templates
+ls ./templates/
 ```
 
-### Missing dependencies
-
-Install optional dependencies:
+Verify with:
 ```bash
-pip install questionary  # For better interactive prompts
+opsartisan list
+```
+
+### Permission errors with .deb build
+
+The build directory might have wrong permissions. Try:
+```bash
+umask 0022
+./build-deb-fixed.sh
+```
+
+### Dependencies missing
+
+Install all required packages:
+```bash
+sudo apt-get install python3 python3-pip python3-venv fakeroot
 ```
 
 ---
 
 ## Uninstall
 
-To remove OpsArtisan:
+### Uninstall .deb Package
 
 ```bash
-# Remove package
+sudo apt-get remove opsartisan
+sudo apt-get purge opsartisan  # Also removes config files
+```
+
+### Uninstall User Installation
+
+```bash
 pip uninstall opsartisan
-
-# Remove completion
 rm ~/.bash_completion.d/opsartisan
-
-# Remove config (optional)
 rm -rf ~/.opsartisan
-
-# Remove from .bashrc
 sed -i '/opsartisan/d' ~/.bashrc
 ```
 
 ---
 
+## Post-Installation Steps
+
+### 1. Create Your First Template
+
+```bash
+opsartisan init
+```
+
+Follow the interactive wizard to create a custom template.
+
+### 2. Explore Available Templates
+
+```bash
+# List all templates
+opsartisan list
+
+# Search for specific templates
+opsartisan search docker
+
+# View template details
+opsartisan info docker-compose
+```
+
+### 3. Generate a Project
+
+```bash
+# Interactive mode
+opsartisan new <template-id>
+
+# With preset
+opsartisan new <template-id> --preset my-preset
+
+# Non-interactive (use defaults)
+opsartisan new <template-id> --yes
+```
+
+### 4. Save Presets
+
+```bash
+# Create a preset
+opsartisan save-preset my-config docker-compose
+
+# List saved presets
+opsartisan preset list
+
+# Use a preset
+opsartisan new docker-compose --preset my-config
+```
+
+---
+
+## Advanced Configuration
+
+### Installing Additional Plugins
+
+```bash
+# User plugins
+mkdir -p ~/.opsartisan/plugins
+cp your-plugin.py ~/.opsartisan/plugins/
+
+# System plugins (requires root)
+sudo mkdir -p /usr/share/opsartisan/plugins
+sudo cp your-plugin.py /usr/share/opsartisan/plugins/
+```
+
+### Environment-Specific Configurations
+
+```bash
+# Create environment configs
+opsartisan env create <template-id> production
+opsartisan env create <template-id> staging
+
+# Compare environments
+opsartisan env compare <template-id> production staging
+```
+
+### Shell Completion for Other Shells
+
+```bash
+# For zsh
+opsartisan completion install zsh
+
+# For fish
+opsartisan completion install fish
+
+# Show completion script (for manual installation)
+opsartisan completion show bash
+```
+
+---
+
+## Getting Help
+
+```bash
+# General help
+opsartisan --help
+
+# Command-specific help
+opsartisan new --help
+opsartisan preset --help
+
+# Show statistics
+opsartisan stats
+
+# Validate a template
+opsartisan validate <template-id> --check-deps --check-tools
+```
+
+---
+
+## Distribution Notes
+
+### For Package Maintainers
+
+The `.deb` package includes:
+- Python virtual environment at `/opt/opsartisan/venv/`
+- Wrapper script at `/usr/local/bin/opsartisan`
+- System templates at `/usr/share/opsartisan/templates/`
+- Bash completion at `/etc/bash_completion.d/opsartisan`
+
+### For End Users
+
+The system-wide installation:
+- Works without activating virtual environments
+- Is available to all users on the system
+- Includes prebuilt templates
+- Supports user-specific customizations
+
+---
+
 ## Next Steps
 
-1. **Create your first template:**
-   ```bash
-   opsartisan init
-   ```
-
-2. **View available templates:**
-   ```bash
-   opsartisan list
-   ```
-
-3. **Generate a project:**
-   ```bash
-   opsartisan new <template-id>
-   ```
-
-4. **View command help:**
-   ```bash
-   opsartisan --help
-   opsartisan new --help
-   ```
+For advanced usage, template development, and integration with CI/CD pipelines, see the [Integration Guide](Integration.md).
