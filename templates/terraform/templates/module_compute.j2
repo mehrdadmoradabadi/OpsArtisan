@@ -1,0 +1,565 @@
+# Compute Module
+# Creates EC2 instances, Auto Scaling Groups, and Load Balancers
+
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "vpc_id" {
+  description = "VPC ID"
+  type        = string
+}
+
+variable "public_subnet_ids" {
+  description = "List of public subnet IDs"
+  type        = list(string)
+}
+
+variable "private_subnet_ids" {
+  description = "List of private subnet IDs"
+  type        = list(string)
+}
+
+variable "instance_type" {
+  description = "EC2 instance type"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "min_instances" {
+  description = "Minimum number of instances in ASG"
+  type        = number
+  default     = 2
+}
+
+variable "max_instances" {
+  description = "Maximum number of instances in ASG"
+  type        = number
+  default     = 10
+}
+
+variable "desired_instances" {
+  description = "Desired number of instances in ASG"
+  type        = number
+  default     = 2
+}
+
+variable "enable_load_balancer" {
+  description = "Enable Application Load Balancer"
+  type        = bool
+  default     = true
+}
+
+variable "load_balancer_type" {
+  description = "Type of load balancer (application or network)"
+  type        = string
+  default     = "application"
+}
+
+variable "enable_ssl" {
+  description = "Enable SSL/TLS on load balancer"
+  type        = bool
+  default     = false
+}
+
+variable "ssl_certificate_arn" {
+  description = "ARN of SSL certificate"
+  type        = string
+  default     = ""
+}
+
+variable "enable_monitoring" {
+  description = "Enable detailed monitoring"
+  type        = bool
+  default     = true
+}
+
+variable "enable_encryption" {
+  description = "Enable EBS encryption"
+  type        = bool
+  default     = true
+}
+
+variable "key_name" {
+  description = "SSH key pair name"
+  type        = string
+  default     = ""
+}
+
+variable "user_data" {
+  description = "User data script"
+  type        = string
+  default     = ""
+}
+
+variable "tags" {
+  description = "Tags to apply to all resources"
+  type        = map(string)
+  default     = {}
+}
+
+# Data sources
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+# Security Group for Application
+resource "aws_security_group" "app" {
+  name_prefix = "${var.project_name}-${var.environment}-app-"
+  description = "Security group for application servers"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP from anywhere"
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTPS from anywhere"
+  }
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]  # TODO: Restrict this
+    description = "SSH from anywhere"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
+  }
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.project_name}-${var.environment}-app-sg"
+    }
+  )
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Security Group for Load Balancer
+resource "aws_security_group" "alb" {
+  count = var.enable_load_balancer ? 1 : 0
+
+  name_prefix = "${var.project_name}-${var.environment}-alb-"
+  description = "Security group for Application Load Balancer"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP from internet"
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTPS from internet"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
+  }
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.project_name}-${var.environment}-alb-sg"
+    }
+  )
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# IAM Role for EC2 instances
+resource "aws_iam_role" "instance" {
+  name = "${var.project_name}-${var.environment}-instance-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "instance_ssm" {
+  role       = aws_iam_role.instance.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "instance_cloudwatch" {
+  role       = aws_iam_role.instance.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+resource "aws_iam_instance_profile" "instance" {
+  name = "${var.project_name}-${var.environment}-instance-profile"
+  role = aws_iam_role.instance.name
+
+  tags = var.tags
+}
+
+# Launch Template
+resource "aws_launch_template" "main" {
+  name_prefix   = "${var.project_name}-${var.environment}-"
+  image_id      = data.aws_ami.amazon_linux_2.id
+  instance_type = var.instance_type
+  key_name      = var.key_name != "" ? var.key_name : null
+
+  vpc_security_group_ids = [aws_security_group.app.id]
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.instance.name
+  }
+
+  monitoring {
+    enabled = var.enable_monitoring
+  }
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = 20
+      volume_type           = "gp3"
+      iops                  = 3000
+      throughput            = 125
+      encrypted             = var.enable_encryption
+      delete_on_termination = true
+    }
+  }
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+    instance_metadata_tags      = "enabled"
+  }
+
+  user_data = var.user_data != "" ? base64encode(var.user_data) : null
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = merge(
+      var.tags,
+      {
+        Name = "${var.project_name}-${var.environment}-instance"
+      }
+    )
+  }
+
+  tag_specifications {
+    resource_type = "volume"
+    tags = merge(
+      var.tags,
+      {
+        Name = "${var.project_name}-${var.environment}-volume"
+      }
+    )
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = var.tags
+}
+
+# Application Load Balancer
+resource "aws_lb" "main" {
+  count = var.enable_load_balancer ? 1 : 0
+
+  name               = "${var.project_name}-${var.environment}-alb"
+  internal           = false
+  load_balancer_type = var.load_balancer_type
+  security_groups    = [aws_security_group.alb[0].id]
+  subnets            = var.public_subnet_ids
+
+  enable_deletion_protection = false
+  enable_http2              = true
+  enable_cross_zone_load_balancing = true
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.project_name}-${var.environment}-alb"
+    }
+  )
+}
+
+# Target Group
+resource "aws_lb_target_group" "main" {
+  count = var.enable_load_balancer ? 1 : 0
+
+  name     = "${var.project_name}-${var.environment}-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/"
+    matcher             = "200-299"
+    protocol            = "HTTP"
+  }
+
+  deregistration_delay = 30
+
+  stickiness {
+    type            = "lb_cookie"
+    cookie_duration = 86400
+    enabled         = true
+  }
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.project_name}-${var.environment}-tg"
+    }
+  )
+}
+
+# HTTP Listener
+resource "aws_lb_listener" "http" {
+  count = var.enable_load_balancer ? 1 : 0
+
+  load_balancer_arn = aws_lb.main[0].arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = var.enable_ssl ? "redirect" : "forward"
+
+    dynamic "redirect" {
+      for_each = var.enable_ssl ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+
+    target_group_arn = var.enable_ssl ? null : aws_lb_target_group.main[0].arn
+  }
+}
+
+# HTTPS Listener
+resource "aws_lb_listener" "https" {
+  count = var.enable_load_balancer && var.enable_ssl ? 1 : 0
+
+  load_balancer_arn = aws_lb.main[0].arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = var.ssl_certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main[0].arn
+  }
+}
+
+# Auto Scaling Group
+resource "aws_autoscaling_group" "main" {
+  name                = "${var.project_name}-${var.environment}-asg"
+  min_size            = var.min_instances
+  max_size            = var.max_instances
+  desired_capacity    = var.desired_instances
+  health_check_type   = var.enable_load_balancer ? "ELB" : "EC2"
+  health_check_grace_period = 300
+  vpc_zone_identifier = var.private_subnet_ids
+  target_group_arns   = var.enable_load_balancer ? [aws_lb_target_group.main[0].arn] : []
+
+  launch_template {
+    id      = aws_launch_template.main.id
+    version = "$Latest"
+  }
+
+  enabled_metrics = [
+    "GroupDesiredCapacity",
+    "GroupInServiceInstances",
+    "GroupMaxSize",
+    "GroupMinSize",
+    "GroupPendingInstances",
+    "GroupStandbyInstances",
+    "GroupTerminatingInstances",
+    "GroupTotalInstances"
+  ]
+
+  tag {
+    key                 = "Name"
+    value               = "${var.project_name}-${var.environment}-asg-instance"
+    propagate_at_launch = true
+  }
+
+  dynamic "tag" {
+    for_each = var.tags
+    content {
+      key                 = tag.key
+      value               = tag.value
+      propagate_at_launch = true
+    }
+  }
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes        = [desired_capacity]
+  }
+}
+
+# Auto Scaling Policies
+resource "aws_autoscaling_policy" "scale_up" {
+  name                   = "${var.project_name}-${var.environment}-scale-up"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.main.name
+}
+
+resource "aws_autoscaling_policy" "scale_down" {
+  name                   = "${var.project_name}-${var.environment}-scale-down"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.main.name
+}
+
+# CloudWatch Alarms
+resource "aws_cloudwatch_metric_alarm" "high_cpu" {
+  count = var.enable_monitoring ? 1 : 0
+
+  alarm_name          = "${var.project_name}-${var.environment}-high-cpu"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 75
+  alarm_description   = "This metric monitors EC2 CPU utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.main.name
+  }
+
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "low_cpu" {
+  count = var.enable_monitoring ? 1 : 0
+
+  alarm_name          = "${var.project_name}-${var.environment}-low-cpu"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 25
+  alarm_description   = "This metric monitors EC2 CPU utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.main.name
+  }
+
+  tags = var.tags
+}
+
+# Outputs
+output "launch_template_id" {
+  description = "ID of the launch template"
+  value       = aws_launch_template.main.id
+}
+
+output "autoscaling_group_name" {
+  description = "Name of the Auto Scaling Group"
+  value       = aws_autoscaling_group.main.name
+}
+
+output "autoscaling_group_arn" {
+  description = "ARN of the Auto Scaling Group"
+  value       = aws_autoscaling_group.main.arn
+}
+
+output "load_balancer_dns" {
+  description = "DNS name of the load balancer"
+  value       = var.enable_load_balancer ? aws_lb.main[0].dns_name : null
+}
+
+output "load_balancer_arn" {
+  description = "ARN of the load balancer"
+  value       = var.enable_load_balancer ? aws_lb.main[0].arn : null
+}
+
+output "target_group_arn" {
+  description = "ARN of the target group"
+  value       = var.enable_load_balancer ? aws_lb_target_group.main[0].arn : null
+}
+
+output "app_security_group_id" {
+  description = "ID of the application security group"
+  value       = aws_security_group.app.id
+}
+
+output "alb_security_group_id" {
+  description = "ID of the ALB security group"
+  value       = var.enable_load_balancer ? aws_security_group.alb[0].id : null
+}

@@ -1,42 +1,596 @@
 {
   "id": "terraform",
-  "title": "Terraform Snippets",
-  "description": "Generate Terraform resource scaffolds for AWS (EC2, S3, VPC, Security Group).",
+  "title": "Terraform Infrastructure Generator",
+  "description": "Generate production-ready Terraform configurations for AWS, Azure, and GCP with modules, state management, and best practices",
+  "category": "Infrastructure as Code",
+  "tags": ["terraform", "iac", "aws", "azure", "gcp", "cloud", "infrastructure"],
+  "version": "2.0.0",
+
+  "dependencies": [],
+
+  "required_tools": [
+    "terraform"
+  ],
+
+  "optional_tools": [
+    "tflint",
+    "terraform-docs",
+    "checkov"
+  ],
+
+  "environment_defaults": {
+    "dev": {
+      "configuration_mode": "simple",
+      "cloud_provider": "aws",
+      "infrastructure_type": "basic",
+      "enable_modules": false,
+      "enable_remote_state": false,
+      "enable_monitoring": false
+    },
+    "staging": {
+      "configuration_mode": "advanced",
+      "cloud_provider": "aws",
+      "infrastructure_type": "application",
+      "enable_modules": true,
+      "enable_remote_state": true,
+      "enable_monitoring": true,
+      "enable_backup": false
+    },
+    "prod": {
+      "configuration_mode": "advanced",
+      "cloud_provider": "aws",
+      "infrastructure_type": "application",
+      "enable_modules": true,
+      "enable_remote_state": true,
+      "enable_monitoring": true,
+      "enable_backup": true,
+      "enable_ha": true,
+      "enable_autoscaling": true,
+      "enable_tags": true
+    }
+  },
+
   "prompts": [
     {
-      "id": "resource_type",
+      "id": "configuration_mode",
       "type": "choice",
-      "label": "Terraform resource",
-      "choices": ["ec2", "s3", "vpc", "sg"],
-      "default": "ec2"
+      "label": "Configuration mode",
+      "choices": ["simple", "advanced"],
+      "default": "simple",
+      "description": "Simple: Quick setup | Advanced: Production-ready with modules and state"
     },
     {
-      "id": "resource_name",
+      "id": "cloud_provider",
+      "type": "choice",
+      "label": "Cloud provider",
+      "choices": ["aws", "azure", "gcp", "multi-cloud"],
+      "default": "aws",
+      "description": "Target cloud platform"
+    },
+    {
+      "id": "infrastructure_type",
+      "type": "choice",
+      "label": "Infrastructure type",
+      "choices": ["basic", "application", "kubernetes", "serverless", "database", "network"],
+      "default": "basic",
+      "description": "Type of infrastructure to deploy"
+    },
+    {
+      "id": "project_name",
       "type": "string",
-      "label": "Resource name",
-      "default": "myresource"
+      "label": "Project name",
+      "default": "myproject",
+      "validation": "^[a-z][a-z0-9-]*$",
+      "description": "Project identifier (lowercase, hyphens allowed)"
+    },
+    {
+      "id": "environment",
+      "type": "choice",
+      "label": "Environment",
+      "choices": ["dev", "staging", "prod"],
+      "default": "dev",
+      "description": "Deployment environment"
     },
     {
       "id": "region",
       "type": "string",
-      "label": "AWS region",
-      "default": "us-east-1"
+      "label": "Primary region",
+      "default": "us-east-1",
+      "description": "Primary deployment region"
+    },
+    {
+      "id": "enable_multi_region",
+      "type": "bool",
+      "label": "Enable multi-region?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Deploy across multiple regions"
+    },
+    {
+      "id": "secondary_regions",
+      "type": "string",
+      "label": "Secondary regions (comma-separated)",
+      "default": "us-west-2,eu-west-1",
+      "condition": "enable_multi_region && configuration_mode == 'advanced'",
+      "description": "Additional regions for deployment"
+    },
+    {
+      "id": "terraform_version",
+      "type": "string",
+      "label": "Terraform version constraint",
+      "default": ">= 1.0",
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Required Terraform version"
+    },
+    {
+      "id": "enable_remote_state",
+      "type": "bool",
+      "label": "Configure remote state?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Use S3/Azure/GCS for state storage"
+    },
+    {
+      "id": "state_backend",
+      "type": "choice",
+      "label": "State backend",
+      "choices": ["s3", "azurerm", "gcs", "terraform-cloud"],
+      "default": "s3",
+      "condition": "enable_remote_state && configuration_mode == 'advanced'",
+      "description": "Backend for Terraform state"
+    },
+    {
+      "id": "state_bucket",
+      "type": "string",
+      "label": "State bucket name",
+      "default": "{{ project_name }}-terraform-state",
+      "condition": "enable_remote_state && configuration_mode == 'advanced'",
+      "description": "Bucket/container for state storage"
+    },
+    {
+      "id": "enable_state_locking",
+      "type": "bool",
+      "label": "Enable state locking?",
+      "default": true,
+      "condition": "enable_remote_state && configuration_mode == 'advanced'",
+      "description": "Prevent concurrent state modifications"
+    },
+    {
+      "id": "enable_modules",
+      "type": "bool",
+      "label": "Use modular structure?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Organize code into reusable modules"
+    },
+    {
+      "id": "enable_workspaces",
+      "type": "bool",
+      "label": "Use Terraform workspaces?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Manage multiple environments with workspaces"
+    },
+    {
+      "id": "enable_ha",
+      "type": "bool",
+      "label": "Enable high availability?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Deploy across availability zones"
+    },
+    {
+      "id": "enable_autoscaling",
+      "type": "bool",
+      "label": "Enable auto-scaling?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced' && infrastructure_type == 'application'",
+      "description": "Configure auto-scaling groups"
+    },
+    {
+      "id": "min_instances",
+      "type": "integer",
+      "label": "Minimum instances",
+      "default": 2,
+      "min": 1,
+      "max": 100,
+      "condition": "enable_autoscaling && configuration_mode == 'advanced'",
+      "description": "Minimum number of instances"
+    },
+    {
+      "id": "max_instances",
+      "type": "integer",
+      "label": "Maximum instances",
+      "default": 10,
+      "min": 1,
+      "max": 1000,
+      "condition": "enable_autoscaling && configuration_mode == 'advanced'",
+      "description": "Maximum number of instances"
+    },
+    {
+      "id": "instance_type",
+      "type": "string",
+      "label": "Instance type",
+      "default": "t3.micro",
+      "condition": "infrastructure_type == 'application'",
+      "description": "EC2 instance type (AWS) or equivalent"
+    },
+    {
+      "id": "enable_monitoring",
+      "type": "bool",
+      "label": "Enable monitoring?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Configure CloudWatch/Azure Monitor/Stackdriver"
+    },
+    {
+      "id": "enable_logging",
+      "type": "bool",
+      "label": "Enable centralized logging?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Configure log aggregation"
+    },
+    {
+      "id": "enable_backup",
+      "type": "bool",
+      "label": "Enable automated backups?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Configure backup policies"
+    },
+    {
+      "id": "backup_retention_days",
+      "type": "integer",
+      "label": "Backup retention (days)",
+      "default": 7,
+      "min": 1,
+      "max": 365,
+      "condition": "enable_backup && configuration_mode == 'advanced'",
+      "description": "How long to retain backups"
+    },
+    {
+      "id": "enable_encryption",
+      "type": "bool",
+      "label": "Enable encryption at rest?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Encrypt storage and databases"
+    },
+    {
+      "id": "enable_vpc",
+      "type": "bool",
+      "label": "Create VPC/VNet?",
+      "default": true,
+      "condition": "infrastructure_type != 'serverless'",
+      "description": "Create isolated network"
+    },
+    {
+      "id": "vpc_cidr",
+      "type": "string",
+      "label": "VPC CIDR block",
+      "default": "10.0.0.0/16",
+      "condition": "enable_vpc",
+      "description": "IP range for VPC"
+    },
+    {
+      "id": "enable_nat_gateway",
+      "type": "bool",
+      "label": "Enable NAT Gateway?",
+      "default": true,
+      "condition": "enable_vpc && configuration_mode == 'advanced'",
+      "description": "Allow private subnet internet access"
+    },
+    {
+      "id": "enable_vpn",
+      "type": "bool",
+      "label": "Enable VPN gateway?",
+      "default": false,
+      "condition": "enable_vpc && configuration_mode == 'advanced'",
+      "description": "Site-to-site VPN connectivity"
+    },
+    {
+      "id": "enable_load_balancer",
+      "type": "bool",
+      "label": "Create load balancer?",
+      "default": false,
+      "condition": "infrastructure_type == 'application'",
+      "description": "Application/Network load balancer"
+    },
+    {
+      "id": "load_balancer_type",
+      "type": "choice",
+      "label": "Load balancer type",
+      "choices": ["application", "network"],
+      "default": "application",
+      "condition": "enable_load_balancer",
+      "description": "ALB for HTTP/HTTPS, NLB for TCP/UDP"
+    },
+    {
+      "id": "enable_ssl",
+      "type": "bool",
+      "label": "Enable SSL/TLS?",
+      "default": true,
+      "condition": "enable_load_balancer",
+      "description": "Configure HTTPS listener"
+    },
+    {
+      "id": "ssl_certificate_arn",
+      "type": "string",
+      "label": "SSL certificate ARN",
+      "default": "",
+      "condition": "enable_ssl && enable_load_balancer && configuration_mode == 'advanced'",
+      "description": "ACM certificate ARN (leave empty to create)"
+    },
+    {
+      "id": "enable_rds",
+      "type": "bool",
+      "label": "Create RDS database?",
+      "default": false,
+      "condition": "infrastructure_type == 'application' || infrastructure_type == 'database'",
+      "description": "Managed database service"
+    },
+    {
+      "id": "rds_engine",
+      "type": "choice",
+      "label": "Database engine",
+      "choices": ["mysql", "postgres", "mariadb", "aurora"],
+      "default": "postgres",
+      "condition": "enable_rds",
+      "description": "Database engine type"
+    },
+    {
+      "id": "rds_instance_class",
+      "type": "string",
+      "label": "Database instance class",
+      "default": "db.t3.micro",
+      "condition": "enable_rds",
+      "description": "RDS instance size"
+    },
+    {
+      "id": "enable_s3",
+      "type": "bool",
+      "label": "Create S3 buckets?",
+      "default": false,
+      "description": "Object storage buckets"
+    },
+    {
+      "id": "s3_buckets",
+      "type": "string",
+      "label": "S3 bucket names (comma-separated)",
+      "default": "uploads,backups",
+      "condition": "enable_s3",
+      "description": "Bucket names to create"
+    },
+    {
+      "id": "enable_tags",
+      "type": "bool",
+      "label": "Add resource tags?",
+      "default": true,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Tag all resources for organization"
+    },
+    {
+      "id": "cost_center",
+      "type": "string",
+      "label": "Cost center",
+      "default": "engineering",
+      "condition": "enable_tags && configuration_mode == 'advanced'",
+      "description": "For cost tracking"
+    },
+    {
+      "id": "owner_email",
+      "type": "string",
+      "label": "Owner email",
+      "default": "devops@example.com",
+      "condition": "enable_tags && configuration_mode == 'advanced'",
+      "description": "Resource owner contact"
+    },
+    {
+      "id": "enable_security_scanning",
+      "type": "bool",
+      "label": "Enable security scanning?",
+      "default": false,
+      "condition": "configuration_mode == 'advanced'",
+      "description": "Add tfsec/checkov configuration"
     }
   ],
+
   "outputs": [
     {
-      "path": "{{ resource_name }}.tf",
-      "template": "{{ resource_type }}.j2"
+      "path": "main.tf",
+      "template": "main.j2"
+    },
+    {
+      "path": "variables.tf",
+      "template": "variables.j2"
+    },
+    {
+      "path": "outputs.tf",
+      "template": "outputs.j2"
+    },
+    {
+      "path": "terraform.tfvars",
+      "template": "tfvars.j2"
+    },
+    {
+      "path": "providers.tf",
+      "template": "providers.j2"
+    },
+    {
+      "path": "backend.tf",
+      "template": "backend.j2",
+      "condition": "enable_remote_state && configuration_mode == 'advanced'"
+    },
+    {
+      "path": "versions.tf",
+      "template": "versions.j2",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "path": "modules/vpc/main.tf",
+      "template": "module_vpc.j2",
+      "condition": "enable_modules && enable_vpc && configuration_mode == 'advanced'"
+    },
+    {
+      "path": "modules/compute/main.tf",
+      "template": "module_compute.j2",
+      "condition": "enable_modules && infrastructure_type == 'application' && configuration_mode == 'advanced'"
+    },
+    {
+      "path": "modules/database/main.tf",
+      "template": "module_database.j2",
+      "condition": "enable_modules && enable_rds && configuration_mode == 'advanced'"
+    },
+    {
+      "path": "scripts/init.sh",
+      "template": "init_script.j2"
+    },
+    {
+      "path": "scripts/plan.sh",
+      "template": "plan_script.j2"
+    },
+    {
+      "path": "scripts/apply.sh",
+      "template": "apply_script.j2"
+    },
+    {
+      "path": "scripts/destroy.sh",
+      "template": "destroy_script.j2"
+    },
+    {
+      "path": ".gitignore",
+      "template": "gitignore.j2"
+    },
+    {
+      "path": ".terraform-docs.yml",
+      "template": "terraform_docs.j2",
+      "condition": "configuration_mode == 'advanced'"
+    },
+    {
+      "path": "README.md",
+      "template": "readme.j2"
     }
   ],
+
   "validators": [
     {
-      "cmd": "terraform validate",
-      "fail_on_nonzero": true
+      "command": "terraform fmt -check",
+      "description": "Check Terraform formatting",
+      "timeout": 10
+    },
+    {
+      "command": "terraform validate",
+      "description": "Validate Terraform configuration",
+      "timeout": 30
     }
   ],
+
+  "tests": [
+    {
+      "command": "bash -n scripts/*.sh",
+      "description": "Validate shell scripts",
+      "cleanup": null
+    }
+  ],
+
+  "hooks": {
+    "post_generation": [
+      {
+        "type": "shell",
+        "command": "chmod +x scripts/*.sh",
+        "description": "Make scripts executable",
+        "on_failure": "warn"
+      },
+      {
+        "type": "shell",
+        "command": "terraform fmt -recursive .",
+        "description": "Format Terraform files",
+        "on_failure": "warn"
+      },
+      {
+        "type": "info",
+        "message": "Review variables in terraform.tfvars before applying",
+        "on_failure": "ignore"
+      },
+      {
+        "type": "info",
+        "message": "Estimated monthly cost will be shown during plan",
+        "on_failure": "ignore"
+      }
+    ]
+  },
+
   "next_steps": [
-    "Run `terraform init && terraform plan`.",
-    "Apply with `terraform apply` when ready."
-  ]
+    "Review and customize terraform.tfvars",
+    "Initialize: bash scripts/init.sh",
+    "Plan: bash scripts/plan.sh",
+    "Review the execution plan carefully",
+    "Apply: bash scripts/apply.sh",
+    "View outputs: terraform output",
+    "For cleanup: bash scripts/destroy.sh"
+  ],
+
+  "example_usage": "opsartisan new terraform --cloud-provider aws --infrastructure-type application --project-name myapp",
+
+  "documentation": {
+    "readme": "README.md",
+    "examples": [
+      {
+        "title": "Simple web application",
+        "command": "opsartisan new terraform --infrastructure-type application --enable-load-balancer",
+        "description": "Basic web app with load balancer"
+      },
+      {
+        "title": "Production application with HA",
+        "command": "opsartisan new terraform --configuration-mode advanced --infrastructure-type application --enable-ha --enable-autoscaling --enable-remote-state",
+        "description": "High availability application with auto-scaling"
+      },
+      {
+        "title": "Database cluster",
+        "command": "opsartisan new terraform --infrastructure-type database --enable-rds --rds-engine aurora --enable-backup",
+        "description": "Aurora database cluster with backups"
+      },
+      {
+        "title": "Multi-region setup",
+        "command": "opsartisan new terraform --configuration-mode advanced --enable-multi-region --enable-modules",
+        "description": "Multi-region infrastructure with modules"
+      }
+    ],
+    "links": [
+      {
+        "title": "Terraform Documentation",
+        "url": "https://www.terraform.io/docs"
+      },
+      {
+        "title": "Terraform Best Practices",
+        "url": "https://www.terraform-best-practices.com/"
+      },
+      {
+        "title": "AWS Provider",
+        "url": "https://registry.terraform.io/providers/hashicorp/aws/latest/docs"
+      },
+      {
+        "title": "Terraform Modules",
+        "url": "https://registry.terraform.io/"
+      }
+    ],
+    "best_practices": [
+      "Use remote state for team collaboration",
+      "Enable state locking to prevent conflicts",
+      "Use modules for reusable components",
+      "Tag all resources for organization",
+      "Use terraform.tfvars for environment-specific values",
+      "Never commit secrets to version control",
+      "Use workspaces for multiple environments",
+      "Run terraform plan before apply",
+      "Use consistent naming conventions",
+      "Document module inputs and outputs",
+      "Enable encryption at rest",
+      "Use security scanning tools (tfsec, checkov)",
+      "Implement proper IAM roles and policies",
+      "Regular backup of state files",
+      "Use data sources instead of hardcoded values"
+    ]
+  }
 }

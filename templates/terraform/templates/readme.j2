@@ -1,0 +1,557 @@
+# {{ project_name }} Infrastructure
+
+Terraform configuration for {{ project_name }} ({{ environment }} environment).
+
+{% if configuration_mode == 'simple' %}
+Simple configuration for quick deployment.
+{% else %}
+Production-ready configuration with modules, remote state, and best practices.
+{% endif %}
+
+## Infrastructure Overview
+
+- **Cloud Provider:** {{ cloud_provider|upper }}
+- **Environment:** {{ environment }}
+- **Region:** {{ region }}
+{% if enable_multi_region and configuration_mode == 'advanced' %}
+- **Secondary Regions:** {{ secondary_regions }}
+{% endif %}
+- **Infrastructure Type:** {{ infrastructure_type }}
+
+## Components
+
+{% if enable_vpc %}
+### Networking
+- VPC with CIDR {{ vpc_cidr }}
+- Public and private subnets
+{% if enable_ha and configuration_mode == 'advanced' %}
+- Multi-AZ deployment for high availability
+{% endif %}
+{% if enable_nat_gateway and configuration_mode == 'advanced' %}
+- NAT Gateway for private subnet internet access
+{% endif %}
+{% if enable_vpn and configuration_mode == 'advanced' %}
+- VPN Gateway for site-to-site connectivity
+{% endif %}
+{% endif %}
+
+{% if infrastructure_type == 'application' %}
+### Compute
+{% if enable_autoscaling and configuration_mode == 'advanced' %}
+- Auto Scaling Group ({{ min_instances }}-{{ max_instances }} instances)
+- Launch Template with {{ instance_type }} instances
+{% else %}
+- Single EC2 instance ({{ instance_type }})
+{% endif %}
+{% if enable_load_balancer %}
+- {{ load_balancer_type|capitalize }} Load Balancer
+{% if enable_ssl %}
+- HTTPS with SSL/TLS certificate
+{% endif %}
+{% endif %}
+{% endif %}
+
+{% if enable_rds %}
+### Database
+- RDS {{ rds_engine }} ({{ rds_instance_class }})
+{% if enable_ha and configuration_mode == 'advanced' %}
+- Multi-AZ deployment
+{% endif %}
+{% if enable_backup and configuration_mode == 'advanced' %}
+- Automated backups ({{ backup_retention_days }} days retention)
+{% endif %}
+{% if enable_encryption %}
+- Encryption at rest enabled
+{% endif %}
+{% endif %}
+
+{% if enable_s3 %}
+### Storage
+- S3 Buckets: {{ s3_buckets }}
+{% if enable_encryption and configuration_mode == 'advanced' %}
+- Server-side encryption enabled
+{% endif %}
+{% if enable_backup and configuration_mode == 'advanced' %}
+- Versioning enabled
+{% endif %}
+{% endif %}
+
+{% if enable_monitoring and configuration_mode == 'advanced' %}
+### Monitoring
+- CloudWatch alarms for CPU utilization
+- Auto-scaling triggers
+{% endif %}
+
+## Prerequisites
+
+1. **Terraform** >= 1.0
+   ```bash
+   terraform --version
+   ```
+
+2. **Cloud Provider CLI**
+   {% if cloud_provider == 'aws' %}
+   ```bash
+   aws --version
+   aws configure  # Configure credentials
+   ```
+   {% elif cloud_provider == 'azure' %}
+   ```bash
+   az --version
+   az login
+   ```
+   {% elif cloud_provider == 'gcp' %}
+   ```bash
+   gcloud --version
+   gcloud auth login
+   ```
+   {% endif %}
+
+3. **Required Permissions**
+   - VPC creation
+   - EC2 management
+   {% if enable_rds %}
+   - RDS management
+   {% endif %}
+   {% if enable_s3 %}
+   - S3 management
+   {% endif %}
+   {% if enable_remote_state and configuration_mode == 'advanced' %}
+   - State backend access
+   {% endif %}
+
+## Quick Start
+
+### 1. Configure Variables
+
+Edit `terraform.tfvars`:
+
+```hcl
+project_name = "{{ project_name }}"
+environment  = "{{ environment }}"
+region       = "{{ region }}"
+{% if infrastructure_type == 'application' %}
+instance_type = "{{ instance_type }}"
+{% endif %}
+```
+
+### 2. Initialize
+
+```bash
+bash scripts/init.sh
+```
+
+This will:
+- Initialize Terraform
+{% if enable_remote_state and configuration_mode == 'advanced' %}
+- Configure remote state backend
+- Create state storage resources if needed
+{% endif %}
+
+### 3. Plan
+
+```bash
+bash scripts/plan.sh
+```
+
+Review the execution plan carefully.
+
+### 4. Apply
+
+```bash
+bash scripts/apply.sh
+```
+
+Confirm when prompted to create infrastructure.
+
+### 5. View Outputs
+
+```bash
+terraform output
+```
+
+## Manual Commands
+
+### Initialize
+```bash
+terraform init
+```
+
+### Format Code
+```bash
+terraform fmt -recursive
+```
+
+### Validate
+```bash
+terraform validate
+```
+
+### Plan
+```bash
+terraform plan -out=tfplan
+```
+
+### Apply
+```bash
+terraform apply tfplan
+```
+
+### Destroy
+```bash
+terraform destroy
+```
+
+## Project Structure
+
+```
+.
+├── main.tf                 # Main infrastructure configuration
+├── variables.tf            # Variable definitions
+├── outputs.tf              # Output definitions
+├── terraform.tfvars        # Variable values (customize this)
+├── providers.tf            # Provider configuration
+{% if enable_remote_state and configuration_mode == 'advanced' %}
+├── backend.tf              # Remote state configuration
+├── versions.tf             # Version constraints
+{% endif %}
+{% if enable_modules and configuration_mode == 'advanced' %}
+├── modules/
+│   ├── vpc/               # VPC module
+│   ├── compute/           # Compute module
+│   └── database/          # Database module
+{% endif %}
+├── scripts/
+│   ├── init.sh            # Initialization script
+│   ├── plan.sh            # Planning script
+│   ├── apply.sh           # Apply script
+│   └── destroy.sh         # Destroy script
+└── README.md              # This file
+```
+
+## State Management
+
+{% if enable_remote_state and configuration_mode == 'advanced' %}
+### Remote State
+
+State is stored in {{ state_backend }}:
+{% if state_backend == 's3' %}
+- **Bucket:** {{ state_bucket }}
+- **Key:** {{ project_name }}/{{ environment }}/terraform.tfstate
+- **Region:** {{ region }}
+{% if enable_state_locking %}
+- **Lock Table:** {{ project_name }}-terraform-locks
+{% endif %}
+{% elif state_backend == 'azurerm' %}
+- **Resource Group:** {{ project_name }}-terraform-state
+- **Storage Account:** {{ state_bucket }}
+- **Container:** tfstate
+{% elif state_backend == 'gcs' %}
+- **Bucket:** {{ state_bucket }}
+- **Prefix:** {{ project_name }}/{{ environment }}
+{% endif %}
+
+### State Operations
+
+```bash
+# Pull remote state
+terraform state pull > terraform.tfstate.backup
+
+# Push local state
+terraform state push terraform.tfstate
+
+# List resources
+terraform state list
+
+# Show resource
+terraform state show <resource>
+
+# Move resource
+terraform state mv <source> <destination>
+
+# Remove resource
+terraform state rm <resource>
+```
+
+{% else %}
+### Local State
+
+State is stored locally in `terraform.tfstate`.
+
+**⚠️ Important:**
+- Backup state files regularly
+- Never commit state to version control
+- Consider using remote state for team collaboration
+{% endif %}
+
+## Workspaces
+
+{% if enable_workspaces and configuration_mode == 'advanced' %}
+This configuration supports Terraform workspaces:
+
+```bash
+# List workspaces
+terraform workspace list
+
+# Create workspace
+terraform workspace new staging
+
+# Switch workspace
+terraform workspace select prod
+
+# Current workspace
+terraform workspace show
+```
+
+{% else %}
+Workspaces are not configured. Consider enabling for multi-environment management.
+{% endif %}
+
+## Security Best Practices
+
+✅ **Implemented:**
+{% if enable_encryption %}
+- Encryption at rest for storage and databases
+{% endif %}
+{% if enable_tags and configuration_mode == 'advanced' %}
+- Resource tagging for organization
+{% endif %}
+- Security groups with least privilege
+- Private subnets for backend resources
+{% if enable_rds %}
+- Database credentials in AWS Secrets Manager
+{% endif %}
+
+⚠️ **Recommendations:**
+- Use IAM roles instead of access keys
+- Enable MFA for AWS account
+- Restrict SSH access to specific IPs
+- Regularly rotate credentials
+- Enable CloudTrail for audit logging
+- Use VPC Flow Logs
+- Implement backup and disaster recovery
+
+## Cost Estimation
+
+{% if infrastructure_type == 'application' %}
+**Estimated Monthly Cost** ({{ region }}):
+
+{% if enable_autoscaling and configuration_mode == 'advanced' %}
+- EC2 Instances ({{ min_instances }}-{{ max_instances }} × {{ instance_type }}): $XX-$XXX
+{% else %}
+- EC2 Instance ({{ instance_type }}): $XX
+{% endif %}
+{% if enable_load_balancer %}
+- {{ load_balancer_type|capitalize }} Load Balancer: $XX
+{% endif %}
+{% if enable_nat_gateway and configuration_mode == 'advanced' %}
+- NAT Gateway: $XX
+{% endif %}
+{% if enable_rds %}
+- RDS {{ rds_engine }} ({{ rds_instance_class }}): $XX
+{% endif %}
+{% if enable_s3 %}
+- S3 Storage: $X (varies with usage)
+{% endif %}
+
+**Total: ~$XXX-$XXX/month**
+
+Use `terraform plan` with cost estimation tools for accurate pricing.
+{% endif %}
+
+## Troubleshooting
+
+### Common Issues
+
+#### 1. Authentication Errors
+
+{% if cloud_provider == 'aws' %}
+```bash
+# Verify AWS credentials
+aws sts get-caller-identity
+
+# Configure credentials
+aws configure
+```
+{% endif %}
+
+#### 2. Resource Already Exists
+
+```bash
+# Import existing resource
+terraform import <resource_type>.<name> <resource_id>
+```
+
+#### 3. State Lock
+
+{% if enable_state_locking and configuration_mode == 'advanced' %}
+```bash
+# Force unlock (use with caution)
+terraform force-unlock <lock-id>
+```
+{% endif %}
+
+#### 4. Plan Fails
+
+```bash
+# Refresh state
+terraform refresh
+
+# Re-initialize
+terraform init -upgrade
+
+# Validate configuration
+terraform validate
+```
+
+### Debugging
+
+```bash
+# Enable debug logging
+export TF_LOG=DEBUG
+export TF_LOG_PATH=terraform.log
+
+# Run terraform command
+terraform plan
+
+# Disable logging
+unset TF_LOG
+unset TF_LOG_PATH
+```
+
+## Maintenance
+
+### Updates
+
+```bash
+# Update provider versions
+terraform init -upgrade
+
+# Update modules
+terraform get -update
+```
+
+### Backups
+
+```bash
+# Backup state
+terraform state pull > backups/terraform.tfstate.$(date +%Y%m%d)
+
+# Backup all .tf files
+tar -czf backups/terraform-config-$(date +%Y%m%d).tar.gz *.tf
+```
+
+### Cleanup
+
+```bash
+# Remove old plan files
+rm -f tfplan
+
+# Clean Terraform directory
+rm -rf .terraform
+
+# Re-initialize
+terraform init
+```
+
+## Destroying Infrastructure
+
+**⚠️ WARNING: This will delete all resources!**
+
+```bash
+# Review what will be destroyed
+terraform plan -destroy
+
+# Destroy with script (includes confirmations)
+bash scripts/destroy.sh
+
+# Or destroy directly
+terraform destroy
+```
+
+## CI/CD Integration
+
+### GitHub Actions Example
+
+```yaml
+name: Terraform
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -no-color
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve
+```
+
+## Additional Tools
+
+### Terraform Linting
+
+```bash
+# Install tflint
+brew install tflint
+
+# Run linter
+tflint
+```
+
+### Security Scanning
+
+```bash
+# Install tfsec
+brew install tfsec
+
+# Scan for security issues
+tfsec .
+
+# Install checkov
+pip install checkov
+
+# Run security scan
+checkov -d .
+```
+
+### Documentation
+
+```bash
+# Install terraform-docs
+brew install terraform-docs
+
+# Generate documentation
+terraform-docs markdown table . > README_GENERATED.md
+```
+
+## Support
+
+- **Terraform Documentation:** https://www.terraform.io/docs
+- **{{ cloud_provider|upper }} Provider:** [Provider Documentation]
+- **Issues:** Create an issue in your repository
+
+## License
+
+[Your License Here]
+
+---
+
+**Generated by OpsArtisan**
