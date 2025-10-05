@@ -1,0 +1,7 @@
+include README.md
+include LICENSE
+include requirements.txt
+recursive-include opsartisan *.py
+recursive-include templates *
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]

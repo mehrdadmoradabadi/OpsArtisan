@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opsartisan"
+version = "2.0.0"
+description = "CLI-first assistant for sysadmins and DevOps engineers"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["devops", "sysadmin", "cli", "templates", "infrastructure"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Software Development :: Code Generators",
+]
+
+dependencies = [
+    "click>=8.0.0",
+    "jinja2>=3.0.0",
+    "pyyaml>=5.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+    "black>=22.0.0",
+    "flake8>=4.0.0",
+    "mypy>=0.950",
+]
+interactive = [
+    "questionary>=1.10.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/opsartisan"
+Documentation = "https://github.com/yourusername/opsartisan/blob/main/README.md"
+Repository = "https://github.com/yourusername/opsartisan"
+"Bug Tracker" = "https://github.com/yourusername/opsartisan/issues"
+
+[project.scripts]
+opsartisan = "opsartisan.cli:cli"
+
+[tool.setuptools]
+packages = ["opsartisan"]
+
+[tool.setuptools.package-data]
+opsartisan = ["py.typed"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=opsartisan --cov-report=term-missing"
